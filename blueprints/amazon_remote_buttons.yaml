@@ -1,105 +1,107 @@
 blueprint:
-  name: Amazon Remote — botones ESPHome
+  name: Amazon Remote — ESPHome Buttons
   description: >-
-    Asigna acciones a los botones del mando conectado mediante ESPHome.
-    Selecciona la entidad «Último botón». Todas las acciones son opcionales.
-    Los botones de aplicaciones dependen del modelo; app_4 no presupone una marca.
-    Las acciones reciben las variables button (up, voice, etc.) y button_event
-    (press o release). La acción general al soltar también se ejecuta al soltar Voz.
+    Assign actions to the buttons on the remote connected through ESPHome.
+    Select the “Last Button” entity. All actions are optional.
+    App buttons depend on the model; app_4 does not assume a particular brand.
+    Actions receive the variables button (up, voice, etc.) and button_event
+    (press or release). The general release action also runs when Voice is released.
+    Native Assist already handles voice actions; leave the Voice press and release
+    actions empty when using Assist.
   domain: automation
   homeassistant:
     min_version: "2024.10.0"
   input:
     remote:
-      name: Último botón
-      description: Entidad sensor «Último botón» del puente ESPHome.
+      name: Last Button
+      description: The “Last Button” sensor entity from the ESPHome bridge.
       selector:
         entity:
           filter:
             - domain: sensor
               integration: esphome
     up:
-      name: Arriba
+      name: Up
       default: []
       selector:
         action: {}
     down:
-      name: Abajo
+      name: Down
       default: []
       selector:
         action: {}
     left:
-      name: Izquierda
+      name: Left
       default: []
       selector:
         action: {}
     right:
-      name: Derecha
+      name: Right
       default: []
       selector:
         action: {}
     select:
-      name: Seleccionar
+      name: Select
       default: []
       selector:
         action: {}
     back:
-      name: Atrás
+      name: Back
       default: []
       selector:
         action: {}
     home:
-      name: Inicio
+      name: Home
       default: []
       selector:
         action: {}
     menu:
-      name: Menú
+      name: Menu
       default: []
       selector:
         action: {}
     voice:
-      name: Voz — pulsar
+      name: Voice — press
       default: []
       selector:
         action: {}
     voice_release:
-      name: Voz — soltar
+      name: Voice — release
       default: []
       selector:
         action: {}
     play_pause:
-      name: Reproducir / pausar
+      name: Play / pause
       default: []
       selector:
         action: {}
     rewind:
-      name: Rebobinar
+      name: Rewind
       default: []
       selector:
         action: {}
     fast_forward:
-      name: Avanzar
+      name: Fast forward
       default: []
       selector:
         action: {}
     volume_up:
-      name: Subir volumen
+      name: Volume up
       default: []
       selector:
         action: {}
     volume_down:
-      name: Bajar volumen
+      name: Volume down
       default: []
       selector:
         action: {}
     mute:
-      name: Silenciar
+      name: Mute
       default: []
       selector:
         action: {}
     power:
-      name: Encendido
+      name: Power
       default: []
       selector:
         action: {}
@@ -124,13 +126,13 @@ blueprint:
       selector:
         action: {}
     app_4:
-      name: Cuarta aplicación
+      name: Fourth app
       default: []
       selector:
         action: {}
     release:
-      name: Cualquier tecla — soltar
-      description: Usa la variable button para saber qué tecla se ha soltado.
+      name: Any button — release
+      description: Use the button variable to identify which button was released.
       default: []
       selector:
         action: {}

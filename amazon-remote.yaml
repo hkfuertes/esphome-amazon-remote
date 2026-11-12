@@ -1,6 +1,12 @@
-esphome:
-  name: amazon-remote-bridge
+substitutions:
+  device_name: amazon-remote-bridge
   friendly_name: Amazon Remote Bridge
+  # Replace with your remote's Bluetooth MAC address (not the ESP32's).
+  remote_mac: "AA:BB:CC:DD:EE:FF"
+
+esphome:
+  name: ${device_name}
+  friendly_name: ${friendly_name}
 
 esp32:
   board: esp32-s3-devkitc-1
@@ -27,9 +33,7 @@ web_server:
   log: true
 
 external_components:
-  - source:
-      type: local
-      path: components
+  - source: github://hkfuertes/esphome-amazon-remote@main
     components: [amazon_remote]
 
 # Unencrypted native API: use only on a trusted LAN.
@@ -52,7 +56,8 @@ wifi:
       - delay: 1s
       - lambda: |-
           // Match the timing used by atv-remote-hid-bridge.
-          esp_bd_addr_t remote = {0x20, 0xBE, 0xB8, 0x80, 0x0C, 0x89};
+          esp_bd_addr_t remote;
+          esphome::ble_device_base::uint64_to_mac_msb_first(id(fire_remote).get_address(), remote);
           const auto err = esp_ble_gap_set_prefer_conn_params(remote, 12, 12, 4, 400);
           if (err != ESP_OK) {
             ESP_LOGW("amazon_remote", "Connection parameters rejected: %s", esp_err_to_name(err));
@@ -78,7 +83,7 @@ esp32_ble_tracker:
     continuous: false
 
 ble_client:
-  - mac_address: 20:BE:B8:80:0C:89
+  - mac_address: ${remote_mac}
     id: fire_remote
     on_connect:
       then:
@@ -257,7 +262,7 @@ text_sensor:
   - platform: amazon_remote
     id: remote_buttons
     ble_client_id: fire_remote
-    name: Último botón
+    name: Last Button
     on_value:
       - lambda: |-
           if (x == "press:voice") {
