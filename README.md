@@ -66,13 +66,13 @@ carga por USB permitió instalar la versión nueva.
    `VoiceAssistantAudio.end`: `voice_assistant.stop` abortaría el pipeline en HA
    y descartaría la transcripción.
 5. Revisa **Assist Transcript**, **Assist Response** y los logs de la web.
-6. Opcional: instala el [desplegable de altavoces](#desplegable-de-altavoces-en-ha)
-   y selecciona dónde reproducir la respuesta. **Sin altavoz** mantiene solo el
-   texto; la selección se guarda en el ESP32 entre reinicios. En las opciones de
-   la integración ESPHome en HA, habilita **Permitir que el dispositivo realice
-   acciones de Home Assistant**. El altavoz debe admitir `media_player.play_media`
-   y poder acceder a la URL de audio generada por HA. La reproducción es externa:
-   no hay audio en el mando ni sincronización del final con el estado Assist.
+6. Opcional: en **Assist Output Speaker**, introduce el `entity_id` de un altavoz
+   de HA, por ejemplo `media_player.salon`. El valor se guarda entre reinicios;
+   vacío deja las respuestas solo como texto. En las opciones de la integración
+   ESPHome en HA, habilita **Permitir que el dispositivo realice acciones de
+   Home Assistant**. El altavoz debe admitir `media_player.play_media` y poder
+   acceder a la URL de audio generada por HA. La reproducción es externa: no se
+   reproduce audio en el mando ni se sincroniza su final con el estado Assist.
 
 HA crea automáticamente los selectores Assistant 2, Finished speaking detection
 (VAD) y Wake word 1/2. El firmware no utiliza wake word ni detección de silencio:
@@ -84,34 +84,6 @@ está conectado al satélite, la pulsación avisa `not_connected` sin grabar. Lo
 logs muestran el primer paquete Opus, los frames decodificados, pérdidas y pico
 PCM para poder diagnosticar silencio o problemas de transporte. La web y la API
 sin autenticar también exponen las transcripciones: mantén la red de confianza.
-
-## Desplegable de altavoces en HA
-
-El selector plantilla **Amazon Remote Output Speaker** lista automáticamente
-`states.media_player`, ordenados por `entity_id`, más **Sin altavoz**. No requiere
-una automatización, token ni firmware adicional. La lista se actualiza cuando
-aparecen o desaparecen reproductores. Si desaparece el seleccionado, conserva
-esa opción para no ocultar la configuración hasta que la cambies o la borres.
-
-1. Copia [`home_assistant/amazon_remote_output_speaker.yaml`](home_assistant/amazon_remote_output_speaker.yaml)
-   a `/config/packages/amazon_remote_output_speaker.yaml` en HA.
-2. Comprueba el `entity_id` del campo **Assist Output Speaker** de ESPHome. Si
-   no es `text.amazon_remote_bridge_assist_output_speaker`, cambia sus cuatro
-   apariciones en el paquete.
-3. Si todavía no usas paquetes, añade esto a `/config/configuration.yaml`:
-
-   ```yaml
-   homeassistant:
-     packages: !include_dir_named packages
-   ```
-
-   Integra la línea en el bloque `homeassistant:` existente, sin duplicarlo.
-   Si ya tienes paquetes configurados, usa su directorio actual.
-4. Comprueba la configuración y reinicia HA. Busca la nueva entidad
-   `select.amazon_remote_output_speaker` (HA puede ajustar su nombre si ya existe).
-5. Selecciona un reproductor y prueba una consulta. Puedes ocultar en HA el campo
-   de texto original, pero **no deshabilitarlo**: guarda la selección y enlaza el
-   desplegable con el ESP32. El desplegable vive en HA, no en la web del ESP32.
 
 ## Notas de hardware
 
@@ -137,9 +109,6 @@ docker run --rm -v "$PWD:/config" --entrypoint python \
 
 docker run --rm -v "$PWD:/config" --entrypoint python \
   ghcr.io/esphome/esphome:2026.10.2 /config/tests/test_output_speaker.py
-
-docker run --rm -v "$PWD:/config" --entrypoint python \
-  ghcr.io/esphome/esphome:2026.10.2 /config/tests/test_output_speaker_select.py
 ```
 
 ## Referencias
