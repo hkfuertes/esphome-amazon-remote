@@ -42,15 +42,35 @@ class AmazonRemote : public Component, public ble_client::BLEClientNode, public 
       case ESP_GATTC_DISCONNECT_EVT:
         this->cancel_timeout("hid");
         reports_.clear();
+        service_uuids_.clear();
+        report_map_handle_ = 0;
+        reading_map_ = false;
         authenticated_ = discovered_ = started_ = audio_subscribed_ = false;
         control_handle_ = 0;
         this->node_state = esp32_ble_tracker::ClientState::IDLE;
         this->publish_state("disconnected");
         break;
+      case ESP_GATTC_SEARCH_RES_EVT:
+        service_uuids_.push_back(esp32_ble_tracker::ESPBTUUID::from_uuid(param->search_res.srvc_id.uuid));
+        break;
       case ESP_GATTC_SEARCH_CMPL_EVT:
         discovered_ = param->search_cmpl.status == ESP_GATT_OK;
         this->node_state = esp32_ble_tracker::ClientState::DISCOVERED;
         start_();
+        break;
+      case ESP_GATTC_READ_CHAR_EVT:
+        if (!reading_map_ || param->read.handle != report_map_handle_) break;
+        this->cancel_timeout("hid");
+        reading_map_ = false;
+        if (param->read.status == ESP_GATT_OK) {
+          ESP_LOGI("amazon_remote_diag", "HID_MAP length=%u", param->read.value_len);
+          for (size_t offset = 0; offset < param->read.value_len; offset += 24) {
+            const auto count = std::min(size_t(24), size_t(param->read.value_len) - offset);
+            ESP_LOGI("amazon_remote_diag", "HID_MAP offset=%u data=%s", unsigned(offset),
+                     format_hex_pretty(param->read.value + offset, count).c_str());
+          }
+        } else ESP_LOGW("amazon_remote_diag", "HID_MAP read failed: status=%d", param->read.status);
+        read_next_();
         break;
       case ESP_GATTC_READ_DESCR_EVT:
         if (!reading_ || index_ >= reports_.size() || param->read.handle != reports_[index_].reference) break;
@@ -131,6 +151,9 @@ class AmazonRemote : public Component, public ble_client::BLEClientNode, public 
     std::string last_button{"unknown"};
   };
   std::vector<Report> reports_;
+  std::vector<esp32_ble_tracker::ESPBTUUID> service_uuids_;
+  uint16_t report_map_handle_{0};
+  bool reading_map_{false};
   size_t index_{0};
   size_t subscribed_{0};
   bool authenticated_{false};
@@ -145,13 +168,14 @@ class AmazonRemote : public Component, public ble_client::BLEClientNode, public 
   void start_() {
     if (!authenticated_ || !discovered_ || started_) return;
     started_ = true;
+    log_gatt_inventory_();
     auto *service = this->parent()->get_service(0x1812);
     if (service == nullptr) {
       ESP_LOGE("amazon_remote", "No HID service");
       this->node_state = esp32_ble_tracker::ClientState::ESTABLISHED;
       return;
     }
-    service->parse_characteristics();
+    if (!service->parsed) service->parse_characteristics();
     for (auto *chr : service->characteristics) {
       if (chr->uuid != esp32_ble_tracker::ESPBTUUID::from_uint16(0x2A4D)) continue;
       auto *reference = chr->get_descriptor(0x2908);
@@ -162,7 +186,46 @@ class AmazonRemote : public Component, public ble_client::BLEClientNode, public 
     index_ = subscribed_ = 0;
     reading_ = true;
     ESP_LOGI("amazon_remote", "Reading %u HID report references", unsigned(reports_.size()));
+    auto *map = service->get_characteristic(0x2A4B);
+    if (map != nullptr) {
+      report_map_handle_ = map->handle;
+      const auto err = esp_ble_gattc_read_char(this->parent()->get_gattc_if(), this->parent()->get_conn_id(),
+                                              report_map_handle_, ESP_GATT_AUTH_REQ_NONE);
+      if (err == ESP_OK) {
+        reading_map_ = true;
+        this->set_timeout("hid", 5000, [this]() {
+          reading_map_ = false;
+          ESP_LOGW("amazon_remote_diag", "HID_MAP read timed out");
+          read_next_();
+        });
+        return;
+      }
+      ESP_LOGW("amazon_remote_diag", "HID_MAP request failed: %s", esp_err_to_name(err));
+    }
     read_next_();
+  }
+
+  void log_gatt_inventory_() {
+    // Research only: enumerate cached metadata; never read or write vendor characteristic values.
+    for (const auto &uuid : service_uuids_) {
+      auto *service = this->parent()->get_service(uuid);
+      if (service == nullptr) continue;
+      char uuid_buf[64];
+      uuid.to_str(uuid_buf);
+      ESP_LOGI("amazon_remote_diag", "GATT service=%s handles=0x%04X-0x%04X", uuid_buf,
+               service->start_handle, service->end_handle);
+      if (!service->parsed) service->parse_characteristics();
+      for (auto *chr : service->characteristics) {
+        chr->uuid.to_str(uuid_buf);
+        ESP_LOGI("amazon_remote_diag", "GATT characteristic=%s handle=0x%04X properties=0x%02X",
+                 uuid_buf, chr->handle, chr->properties);
+        chr->parse_descriptors();
+        for (auto *descriptor : chr->descriptors) {
+          descriptor->uuid.to_str(uuid_buf);
+          ESP_LOGI("amazon_remote_diag", "GATT descriptor=%s handle=0x%04X", uuid_buf, descriptor->handle);
+        }
+      }
+    }
   }
 
   void read_next_() {
