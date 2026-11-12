@@ -11,6 +11,19 @@
 namespace esphome::amazon_remote {
 class AmazonRemote : public Component, public ble_client::BLEClientNode, public text_sensor::TextSensor {
  public:
+  void add_audio_callback(std::function<void(const uint8_t *, size_t)> callback) {
+    audio_callbacks_.add(std::move(callback));
+  }
+  bool audio_ready() const { return authenticated_ && control_handle_ != 0 && audio_subscribed_; }
+  bool set_microphone_enabled(bool enabled) {
+    if (!audio_ready()) return false;
+    uint8_t value = enabled ? 1 : 0;
+    const auto err = esp_ble_gattc_write_char(this->parent()->get_gattc_if(), this->parent()->get_conn_id(),
+                                             control_handle_, 1, &value, control_write_type_, ESP_GATT_AUTH_REQ_NONE);
+    if (err != ESP_OK) ESP_LOGW("amazon_remote", "Microphone command failed: %s", esp_err_to_name(err));
+    return err == ESP_OK;
+  }
+
   void setup() override {
     this->node_state = esp32_ble_tracker::ClientState::IDLE;
     this->disable_loop();
@@ -29,7 +42,8 @@ class AmazonRemote : public Component, public ble_client::BLEClientNode, public 
       case ESP_GATTC_DISCONNECT_EVT:
         this->cancel_timeout("hid");
         reports_.clear();
-        authenticated_ = discovered_ = started_ = false;
+        authenticated_ = discovered_ = started_ = audio_subscribed_ = false;
+        control_handle_ = 0;
         this->node_state = esp32_ble_tracker::ClientState::IDLE;
         this->publish_state("disconnected");
         break;
@@ -41,9 +55,17 @@ class AmazonRemote : public Component, public ble_client::BLEClientNode, public 
       case ESP_GATTC_READ_DESCR_EVT:
         if (!reading_ || index_ >= reports_.size() || param->read.handle != reports_[index_].reference) break;
         this->cancel_timeout("hid");
-        if (param->read.status == ESP_GATT_OK && param->read.value_len >= 2 && param->read.value[1] == 1) {
+        if (param->read.status == ESP_GATT_OK && param->read.value_len >= 2) {
           reports_[index_].id = param->read.value[0];
-          ESP_LOGI("amazon_remote", "HID input report 0x%02X at handle 0x%04X", reports_[index_].id, reports_[index_].handle);
+          auto &report = reports_[index_];
+          report.type = param->read.value[1];
+          if (report.id == 0xF2 && report.type == 2 &&
+              (report.properties & (ESP_GATT_CHAR_PROP_BIT_WRITE | ESP_GATT_CHAR_PROP_BIT_WRITE_NR))) {
+            control_handle_ = report.handle;
+            control_write_type_ = report.properties & ESP_GATT_CHAR_PROP_BIT_WRITE
+                                      ? ESP_GATT_WRITE_TYPE_RSP : ESP_GATT_WRITE_TYPE_NO_RSP;
+          }
+          ESP_LOGI("amazon_remote", "HID report 0x%02X type=%u at handle 0x%04X", report.id, report.type, report.handle);
         } else {
           ESP_LOGW("amazon_remote", "Cannot read report reference: status=%d length=%u", param->read.status, param->read.value_len);
         }
@@ -65,14 +87,25 @@ class AmazonRemote : public Component, public ble_client::BLEClientNode, public 
         this->cancel_timeout("hid");
         if (param->write.status == ESP_GATT_OK) {
           ++subscribed_;
-          ESP_LOGI("amazon_remote", "Subscribed to button report 0x%02X", reports_[index_].id);
+          if (reports_[index_].id == 0xF0) audio_subscribed_ = true;
+          ESP_LOGI("amazon_remote", "Subscribed to HID report 0x%02X", reports_[index_].id);
         } else ESP_LOGW("amazon_remote", "CCCD write failed: %d", param->write.status);
         ++index_;
         subscribe_next_();
         break;
+      case ESP_GATTC_WRITE_CHAR_EVT:
+        if (param->write.handle == control_handle_ && param->write.status != ESP_GATT_OK)
+          ESP_LOGW("amazon_remote", "Microphone control write failed: %d", param->write.status);
+        break;
       case ESP_GATTC_NOTIFY_EVT:
         for (auto &report : reports_) {
-          if (report.handle != param->notify.handle || !is_button_report(report.id)) continue;
+          if (report.handle != param->notify.handle) continue;
+          if (report.id == 0xF0 && report.type == 1) {
+            // GATT values contain raw Opus, without the hidraw report-ID prefix.
+            audio_callbacks_.call(param->notify.value, param->notify.value_len);
+            break;
+          }
+          if (!is_button_report(report.id)) continue;
           const auto name = decode_button(report.id, param->notify.value, param->notify.value_len);
           const bool release = name == "release";
           const auto state = release ? "release:" + report.last_button : "press:" + name;
@@ -92,7 +125,9 @@ class AmazonRemote : public Component, public ble_client::BLEClientNode, public 
     uint16_t handle;
     uint16_t reference;
     uint16_t cccd;
+    esp_gatt_char_prop_t properties;
     uint8_t id{0};
+    uint8_t type{0};
     std::string last_button{"unknown"};
   };
   std::vector<Report> reports_;
@@ -102,6 +137,10 @@ class AmazonRemote : public Component, public ble_client::BLEClientNode, public 
   bool discovered_{false};
   bool started_{false};
   bool reading_{false};
+  bool audio_subscribed_{false};
+  uint16_t control_handle_{0};
+  esp_gatt_write_type_t control_write_type_{ESP_GATT_WRITE_TYPE_RSP};
+  CallbackManager<void(const uint8_t *, size_t)> audio_callbacks_;
 
   void start_() {
     if (!authenticated_ || !discovered_ || started_) return;
@@ -114,11 +153,11 @@ class AmazonRemote : public Component, public ble_client::BLEClientNode, public 
     }
     service->parse_characteristics();
     for (auto *chr : service->characteristics) {
-      if (chr->uuid != esp32_ble_tracker::ESPBTUUID::from_uint16(0x2A4D) ||
-          !(chr->properties & ESP_GATT_CHAR_PROP_BIT_NOTIFY)) continue;
+      if (chr->uuid != esp32_ble_tracker::ESPBTUUID::from_uint16(0x2A4D)) continue;
       auto *reference = chr->get_descriptor(0x2908);
       auto *cccd = chr->get_descriptor(0x2902);
-      if (reference != nullptr && cccd != nullptr) reports_.push_back({chr->handle, reference->handle, cccd->handle});
+      if (reference != nullptr)
+        reports_.push_back({chr->handle, reference->handle, uint16_t(cccd ? cccd->handle : 0), chr->properties});
     }
     index_ = subscribed_ = 0;
     reading_ = true;
@@ -148,7 +187,9 @@ class AmazonRemote : public Component, public ble_client::BLEClientNode, public 
 
   void subscribe_next_() {
     while (index_ < reports_.size()) {
-      if (is_button_report(reports_[index_].id)) {
+      const auto &report = reports_[index_];
+      if (report.type == 1 && report.cccd != 0 &&
+          (is_button_report(report.id) || report.id == 0xF0)) {
         const auto err = this->parent()->register_for_notify(reports_[index_].handle);
         if (err == ESP_OK) {
           this->set_timeout("hid", 5000, [this]() {
@@ -163,7 +204,8 @@ class AmazonRemote : public Component, public ble_client::BLEClientNode, public 
       ++index_;
     }
     this->node_state = esp32_ble_tracker::ClientState::ESTABLISHED;
-    ESP_LOGI("amazon_remote", "Ready: %u button reports subscribed", unsigned(subscribed_));
+    ESP_LOGI("amazon_remote", "Ready: %u HID reports subscribed, microphone=%s", unsigned(subscribed_),
+             audio_ready() ? "available" : "unavailable");
     this->publish_state(subscribed_ ? "ready" : "no_button_reports");
   }
 };

@@ -10,8 +10,9 @@
 Incluye las teclas conocidas por el decodificador, una acción específica al soltar
 Voz y una acción general al soltar cualquier tecla. Las acciones pueden usar
 `{{ button }}` y `{{ button_event }}`. Al soltar Voz se ejecutan ambas acciones de
-liberación si están configuradas. La opción Voz solo asigna acciones: todavía no
-transmite audio a Assist.
+liberación si están configuradas. En la rama Assist, el firmware ya controla el
+pipeline directamente con Alexa: deja vacías las acciones de Voz del blueprint
+para no duplicar el control. El blueprint por sí solo no transporta audio.
 
 Solo funcionan las teclas que el mando envíe por Bluetooth. Los nombres de las
 aplicaciones pueden variar según el modelo. No se generan repeticiones ni

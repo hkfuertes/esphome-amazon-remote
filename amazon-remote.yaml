@@ -108,7 +108,143 @@ binary_sensor:
   - platform: status
     name: Status
 
+globals:
+  - id: alexa_held
+    type: bool
+    restore_value: false
+    initial_value: 'false'
+
+audio:
+  codecs:
+    opus:
+      state_memory: psram
+      pseudostack:
+        buffer_memory: psram
+
+microphone:
+  - platform: amazon_remote
+    id: remote_mic
+    remote_id: remote_buttons
+
+# Safety ceiling if the release packet is lost; no continuous listening.
+script:
+  - id: assist_recording_limit
+    mode: restart
+    then:
+      - delay: 30s
+      - script.execute: assist_finish_recording
+      - logger.log: "Assist recording limit reached (30s)"
+  - id: assist_finish_recording
+    mode: single
+    then:
+      # Stop the remote first; let queued PCM reach HA before sending end-of-audio.
+      - lambda: id(remote_buttons).set_microphone_enabled(false);
+      - delay: 100ms
+      - lambda: |-
+          auto *client = id(assist).get_api_connection();
+          if (client == nullptr) return;
+          esphome::api::VoiceAssistantAudio end;
+          end.end = true;
+          if (!client->send_message(end)) {
+            ESP_LOGW("assist", "Failed to send end-of-audio");
+            id(assist).request_stop();
+            return;
+          }
+          // Follow the native VAD-end lifecycle, without the abort sent by request_stop().
+          esphome::api::VoiceAssistantEventResponse event;
+          event.event_type = esphome::api::enums::VOICE_ASSISTANT_STT_VAD_END;
+          id(assist).on_event(event);
+          id(assist_status).publish_state("processing");
+          ESP_LOGI("assist", "Audio finished; waiting for transcription");
+
+voice_assistant:
+  id: assist
+  microphone: remote_mic
+  use_wake_word: false
+  on_client_connected:
+    - text_sensor.template.publish:
+        id: assist_status
+        state: connected
+  on_client_disconnected:
+    - script.stop: assist_finish_recording
+    - microphone.stop_capture: remote_mic
+    - voice_assistant.stop:
+        id: assist
+    - script.stop: assist_recording_limit
+    - text_sensor.template.publish:
+        id: assist_status
+        state: disconnected
+  on_listening:
+    - text_sensor.template.publish:
+        id: assist_status
+        state: listening
+    - logger.log: "Assist listening: speak while holding Alexa"
+  on_stt_end:
+    - lambda: |-
+        id(assist_transcript).publish_state(x);
+        ESP_LOGI("assist", "Recognized: %s", x.c_str());
+    - text_sensor.template.publish:
+        id: assist_status
+        state: processing
+  on_tts_start:
+    - lambda: |-
+        id(assist_response).publish_state(x);
+        ESP_LOGI("assist", "Response: %s", x.c_str());
+  on_tts_end:
+    - if:
+        condition:
+          lambda: |-
+            const auto &entity = id(assist_output_speaker).state;
+            return entity.size() > 13 && entity.compare(0, 13, "media_player.") == 0 &&
+                   entity.find_first_not_of("abcdefghijklmnopqrstuvwxyz0123456789_", 13) == std::string::npos;
+        then:
+          - homeassistant.action:
+              action: media_player.play_media
+              data:
+                entity_id: !lambda return id(assist_output_speaker).state;
+                media_content_id: !lambda return x;
+                media_content_type: music
+  on_end:
+    - script.stop: assist_finish_recording
+    - microphone.stop_capture: remote_mic
+    - script.stop: assist_recording_limit
+    - text_sensor.template.publish:
+        id: assist_status
+        state: idle
+  on_error:
+    - script.stop: assist_finish_recording
+    - microphone.stop_capture: remote_mic
+    - script.stop: assist_recording_limit
+    - lambda: |-
+        id(assist_status).publish_state("error:" + code);
+        ESP_LOGW("assist", "%s: %s", code.c_str(), message.c_str());
+
+# Optional HA media_player entity_id; empty keeps responses text-only.
+text:
+  - platform: template
+    id: assist_output_speaker
+    name: Assist Output Speaker
+    entity_category: config
+    mode: text
+    optimistic: true
+    restore_value: true
+    initial_value: ""
+    min_length: 0
+    max_length: 100
+
 text_sensor:
+  - platform: template
+    id: assist_status
+    name: Assist Status
+    update_interval: never
+  - platform: template
+    id: assist_transcript
+    name: Assist Transcript
+    update_interval: never
+  - platform: template
+    id: assist_response
+    name: Assist Response
+    update_interval: never
   - platform: version
     name: ESPHome Version
   - platform: wifi_info
@@ -119,8 +255,40 @@ text_sensor:
     mac_address:
       name: Wi-Fi MAC
   - platform: amazon_remote
+    id: remote_buttons
     ble_client_id: fire_remote
     name: Último botón
+    on_value:
+      - lambda: |-
+          if (x == "press:voice") {
+            if (id(alexa_held)) return;
+            id(alexa_held) = true;
+            if (id(assist).get_api_connection() == nullptr) {
+              ESP_LOGW("assist", "Home Assistant has not connected to the Assist satellite");
+              id(assist_status).publish_state("not_connected");
+            } else if (!id(remote_mic).is_ready()) {
+              ESP_LOGW("assist", "Remote microphone is not ready");
+              id(assist_status).publish_state("microphone_not_ready");
+            } else if (!id(assist).is_running_or_continuous()) {
+              id(assist).request_start(false, false);
+              id(assist_recording_limit).execute();
+            }
+          } else if (x == "release:voice") {
+            if (!id(alexa_held)) return;
+            id(alexa_held) = false;
+            id(assist_recording_limit).stop();
+            if (id(assist_status).state == "listening") {
+              id(assist_finish_recording).execute();
+            } else if (id(assist_status).state != "processing") {
+              // Released before HA started listening: cancel the empty session.
+              id(assist).request_stop();
+            }
+          } else if (x == "disconnected") {
+            id(alexa_held) = false;
+            id(assist_recording_limit).stop();
+            id(assist_finish_recording).stop();
+            id(assist).request_stop();
+          }
 
 sensor:
   - platform: uptime
