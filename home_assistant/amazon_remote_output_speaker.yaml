@@ -1,0 +1,23 @@
+# HA package: copy to /config/packages/amazon_remote_output_speaker.yaml.
+# Replace the text entity_id below if HA assigned a different one (4 occurrences).
+template:
+  - select:
+      - name: Amazon Remote Output Speaker
+        unique_id: amazon_remote_output_speaker
+        icon: mdi:speaker
+        availability: >-
+          {{ has_value('text.amazon_remote_bridge_assist_output_speaker') }}
+        state: >-
+          {% set selected = states('text.amazon_remote_bridge_assist_output_speaker') %}
+          {{ selected if selected.startswith('media_player.') else 'Sin altavoz' }}
+        options: >-
+          {% set players = states.media_player | map(attribute='entity_id') | list %}
+          {% set selected = states('text.amazon_remote_bridge_assist_output_speaker') %}
+          {# Keep a removed selection visible until the user clears or replaces it. #}
+          {{ ['Sin altavoz'] + ((players + ([selected] if selected.startswith('media_player.') else [])) | unique | sort | list) }}
+        select_option:
+          - action: text.set_value
+            target:
+              entity_id: text.amazon_remote_bridge_assist_output_speaker
+            data:
+              value: "{{ '' if option == 'Sin altavoz' else option }}"
