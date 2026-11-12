@@ -190,6 +190,20 @@ voice_assistant:
     - lambda: |-
         id(assist_response).publish_state(x);
         ESP_LOGI("assist", "Response: %s", x.c_str());
+  on_tts_end:
+    - if:
+        condition:
+          lambda: |-
+            const auto &entity = id(assist_output_speaker).state;
+            return entity.size() > 13 && entity.compare(0, 13, "media_player.") == 0 &&
+                   entity.find_first_not_of("abcdefghijklmnopqrstuvwxyz0123456789_", 13) == std::string::npos;
+        then:
+          - homeassistant.action:
+              action: media_player.play_media
+              data:
+                entity_id: !lambda return id(assist_output_speaker).state;
+                media_content_id: !lambda return x;
+                media_content_type: music
   on_end:
     - script.stop: assist_finish_recording
     - microphone.stop_capture: remote_mic
@@ -204,6 +218,19 @@ voice_assistant:
     - lambda: |-
         id(assist_status).publish_state("error:" + code);
         ESP_LOGW("assist", "%s: %s", code.c_str(), message.c_str());
+
+# Optional HA media_player entity_id; empty keeps responses text-only.
+text:
+  - platform: template
+    id: assist_output_speaker
+    name: Assist Output Speaker
+    entity_category: config
+    mode: text
+    optimistic: true
+    restore_value: true
+    initial_value: ""
+    min_length: 0
+    max_length: 100
 
 text_sensor:
   - platform: template

@@ -15,9 +15,9 @@ Amazon 0171:042F.
 
 Esta rama añade **Assist nativo por pulsación de Alexa**: F2 controla el micrófono,
 F0 entrega Opus y el ESP32 lo convierte a PCM de 16 kHz mono. Implementación
-compilada y captura/conversión PCM verificadas con el mando real, sin errores de
-decodificación ni pérdidas en las pruebas. El pipeline completo de Assist sigue
-en validación. IR queda fuera de alcance.
+compilada y validada de extremo a extremo con el mando real y Home Assistant,
+sin errores de decodificación ni pérdidas en las pruebas. IR queda fuera de
+alcance.
 La reconexión tras dormir/reiniciar necesita más pruebas; una primera pulsación
 puede servir solo para despertar el mando.
 
@@ -65,8 +65,19 @@ carga por USB permitió instalar la versión nueva.
    La grabación tiene un límite de seguridad de 30 segundos. Al soltar se envía
    `VoiceAssistantAudio.end`: `voice_assistant.stop` abortaría el pipeline en HA
    y descartaría la transcripción.
-5. Revisa **Assist Transcript**, **Assist Response** y los logs de la web. No hay
-   altavoz conectado: esta configuración no reproduce la respuesta en el mando.
+5. Revisa **Assist Transcript**, **Assist Response** y los logs de la web.
+6. Opcional: en **Assist Output Speaker**, introduce el `entity_id` de un altavoz
+   de HA, por ejemplo `media_player.salon`. El valor se guarda entre reinicios;
+   vacío deja las respuestas solo como texto. En las opciones de la integración
+   ESPHome en HA, habilita **Permitir que el dispositivo realice acciones de
+   Home Assistant**. El altavoz debe admitir `media_player.play_media` y poder
+   acceder a la URL de audio generada por HA. La reproducción es externa: no se
+   reproduce audio en el mando ni se sincroniza su final con el estado Assist.
+
+HA crea automáticamente los selectores Assistant 2, Finished speaking detection
+(VAD) y Wake word 1/2. El firmware no utiliza wake word ni detección de silencio:
+soltar Alexa finaliza la grabación. Puedes deshabilitar esas entidades una vez en
+HA; conserva Assistant para seleccionar el pipeline.
 
 El micrófono solo se habilita durante una sesión iniciada por el botón. Si HA no
 está conectado al satélite, la pulsación avisa `not_connected` sin grabar. Los
@@ -95,6 +106,9 @@ docker run --rm -v "$PWD:/config" --entrypoint python \
 
 docker run --rm -v "$PWD:/config" --entrypoint python \
   ghcr.io/esphome/esphome:2026.10.2 /config/tests/test_assist_protocol.py
+
+docker run --rm -v "$PWD:/config" --entrypoint python \
+  ghcr.io/esphome/esphome:2026.10.2 /config/tests/test_output_speaker.py
 ```
 
 ## Referencias

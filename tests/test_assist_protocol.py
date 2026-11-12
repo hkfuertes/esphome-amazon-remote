@@ -12,6 +12,7 @@ class Loader(yaml.SafeLoader):
 
 
 Loader.add_constructor("!secret", lambda loader, node: loader.construct_scalar(node))
+Loader.add_constructor("!lambda", lambda loader, node: loader.construct_scalar(node))
 config = yaml.load((Path(__file__).resolve().parents[1] / "amazon-remote.yaml").read_text(), Loader=Loader)
 finish = next(s for s in config["script"] if s["id"] == "assist_finish_recording")
 code = finish["then"][-1]["lambda"]
