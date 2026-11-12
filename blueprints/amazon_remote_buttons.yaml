@@ -1,0 +1,203 @@
+blueprint:
+  name: Amazon Remote — botones ESPHome
+  description: >-
+    Asigna acciones a los botones del mando conectado mediante ESPHome.
+    Selecciona la entidad «Último botón». Todas las acciones son opcionales.
+    Los botones de aplicaciones dependen del modelo; app_4 no presupone una marca.
+    Las acciones reciben las variables button (up, voice, etc.) y button_event
+    (press o release). La acción general al soltar también se ejecuta al soltar Voz.
+  domain: automation
+  homeassistant:
+    min_version: "2024.10.0"
+  input:
+    remote:
+      name: Último botón
+      description: Entidad sensor «Último botón» del puente ESPHome.
+      selector:
+        entity:
+          filter:
+            - domain: sensor
+              integration: esphome
+    up:
+      name: Arriba
+      default: []
+      selector:
+        action: {}
+    down:
+      name: Abajo
+      default: []
+      selector:
+        action: {}
+    left:
+      name: Izquierda
+      default: []
+      selector:
+        action: {}
+    right:
+      name: Derecha
+      default: []
+      selector:
+        action: {}
+    select:
+      name: Seleccionar
+      default: []
+      selector:
+        action: {}
+    back:
+      name: Atrás
+      default: []
+      selector:
+        action: {}
+    home:
+      name: Inicio
+      default: []
+      selector:
+        action: {}
+    menu:
+      name: Menú
+      default: []
+      selector:
+        action: {}
+    voice:
+      name: Voz — pulsar
+      default: []
+      selector:
+        action: {}
+    voice_release:
+      name: Voz — soltar
+      default: []
+      selector:
+        action: {}
+    play_pause:
+      name: Reproducir / pausar
+      default: []
+      selector:
+        action: {}
+    rewind:
+      name: Rebobinar
+      default: []
+      selector:
+        action: {}
+    fast_forward:
+      name: Avanzar
+      default: []
+      selector:
+        action: {}
+    volume_up:
+      name: Subir volumen
+      default: []
+      selector:
+        action: {}
+    volume_down:
+      name: Bajar volumen
+      default: []
+      selector:
+        action: {}
+    mute:
+      name: Silenciar
+      default: []
+      selector:
+        action: {}
+    power:
+      name: Encendido
+      default: []
+      selector:
+        action: {}
+    tv:
+      name: TV
+      default: []
+      selector:
+        action: {}
+    prime_video:
+      name: Prime Video
+      default: []
+      selector:
+        action: {}
+    netflix:
+      name: Netflix
+      default: []
+      selector:
+        action: {}
+    disney_plus:
+      name: Disney+
+      default: []
+      selector:
+        action: {}
+    app_4:
+      name: Cuarta aplicación
+      default: []
+      selector:
+        action: {}
+    release:
+      name: Cualquier tecla — soltar
+      description: Usa la variable button para saber qué tecla se ha soltado.
+      default: []
+      selector:
+        action: {}
+
+triggers:
+  - trigger: state
+    entity_id: !input remote
+    to: null
+
+variables:
+  button_state: "{{ trigger.to_state.state if trigger is defined and trigger.to_state is not none else '' }}"
+  button: "{{ button_state.split(':', 1)[-1] }}"
+  button_event: "{{ button_state.split(':', 1)[0] }}"
+
+conditions:
+  - condition: template
+    value_template: "{{ button_event in ['press', 'release'] }}"
+
+actions:
+  - choose:
+      - conditions: "{{ button_event == 'press' and button == 'up' }}"
+        sequence: !input up
+      - conditions: "{{ button_event == 'press' and button == 'down' }}"
+        sequence: !input down
+      - conditions: "{{ button_event == 'press' and button == 'left' }}"
+        sequence: !input left
+      - conditions: "{{ button_event == 'press' and button == 'right' }}"
+        sequence: !input right
+      - conditions: "{{ button_event == 'press' and button == 'select' }}"
+        sequence: !input select
+      - conditions: "{{ button_event == 'press' and button == 'back' }}"
+        sequence: !input back
+      - conditions: "{{ button_event == 'press' and button == 'home' }}"
+        sequence: !input home
+      - conditions: "{{ button_event == 'press' and button == 'menu' }}"
+        sequence: !input menu
+      - conditions: "{{ button_event == 'press' and button == 'voice' }}"
+        sequence: !input voice
+      - conditions: "{{ button_event == 'release' and button == 'voice' }}"
+        sequence: !input voice_release
+      - conditions: "{{ button_event == 'press' and button == 'play_pause' }}"
+        sequence: !input play_pause
+      - conditions: "{{ button_event == 'press' and button == 'rewind' }}"
+        sequence: !input rewind
+      - conditions: "{{ button_event == 'press' and button == 'fast_forward' }}"
+        sequence: !input fast_forward
+      - conditions: "{{ button_event == 'press' and button == 'volume_up' }}"
+        sequence: !input volume_up
+      - conditions: "{{ button_event == 'press' and button == 'volume_down' }}"
+        sequence: !input volume_down
+      - conditions: "{{ button_event == 'press' and button == 'mute' }}"
+        sequence: !input mute
+      - conditions: "{{ button_event == 'press' and button == 'power' }}"
+        sequence: !input power
+      - conditions: "{{ button_event == 'press' and button == 'tv' }}"
+        sequence: !input tv
+      - conditions: "{{ button_event == 'press' and button == 'prime_video' }}"
+        sequence: !input prime_video
+      - conditions: "{{ button_event == 'press' and button == 'netflix' }}"
+        sequence: !input netflix
+      - conditions: "{{ button_event == 'press' and button == 'disney_plus' }}"
+        sequence: !input disney_plus
+      - conditions: "{{ button_event == 'press' and button == 'app_4' }}"
+        sequence: !input app_4
+  - choose:
+      - conditions: "{{ button_event == 'release' }}"
+        sequence: !input release
+
+# Run releases even while a press action is waiting or playing media.
+mode: parallel

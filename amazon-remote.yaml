@@ -1,0 +1,131 @@
+esphome:
+  name: amazon-remote-bridge
+  friendly_name: Amazon Remote Bridge
+
+esp32:
+  board: esp32-s3-devkitc-1
+  flash_size: 4MB
+  framework:
+    type: esp-idf
+
+psram:
+  mode: quad
+  speed: 80MHz
+
+logger:
+  level: DEBUG
+  hardware_uart: USB_SERIAL_JTAG
+  logs:
+    esp32_ble_tracker: INFO
+    esp32_ble_client: INFO
+    esp32_ble: INFO
+
+web_server:
+  port: 80
+  version: 3
+  local: true
+  log: true
+
+external_components:
+  - source:
+      type: local
+      path: components
+    components: [amazon_remote]
+
+# Unencrypted native API: use only on a trusted LAN.
+api: {}
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+wifi:
+  power_save_mode: none
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+    ssid: Amazon Remote Rescue
+    password: !secret fallback_ap_password
+  on_connect:
+    then:
+      - ble.enable:
+      - delay: 1s
+      - lambda: |-
+          // Match the timing used by atv-remote-hid-bridge.
+          esp_bd_addr_t remote = {0x20, 0xBE, 0xB8, 0x80, 0x0C, 0x89};
+          const auto err = esp_ble_gap_set_prefer_conn_params(remote, 12, 12, 4, 400);
+          if (err != ESP_OK) {
+            ESP_LOGW("amazon_remote", "Connection parameters rejected: %s", esp_err_to_name(err));
+          }
+      - esp32_ble_tracker.start_scan:
+          continuous: true
+      - logger.log: "Wi-Fi connected; BLE scan requested"
+  on_disconnect:
+    then:
+      - esp32_ble_tracker.stop_scan:
+      - ble.disable:
+
+captive_portal:
+
+# Wi-Fi authenticates before BLE starts sharing the radio.
+esp32_ble:
+  enable_on_boot: false
+  io_capability: none
+  auth_req_mode: bond
+
+esp32_ble_tracker:
+  scan_parameters:
+    continuous: false
+
+ble_client:
+  - mac_address: 20:BE:B8:80:0C:89
+    id: fire_remote
+    on_connect:
+      then:
+        - logger.log: "Amazon remote BLE link connected"
+        - lambda: |-
+            const auto err = id(fire_remote).pair();
+            if (err != ESP_OK) {
+              ESP_LOGW("amazon_remote", "Pair request failed: %s", esp_err_to_name(err));
+            }
+    on_disconnect:
+      then:
+        - logger.log: "Amazon remote BLE link disconnected"
+
+button:
+  - platform: restart
+    name: Restart
+    entity_category: config
+  - platform: safe_mode
+    name: Restart in Safe Mode
+    entity_category: config
+  - platform: template
+    name: Connect Amazon Remote
+    on_press:
+      - ble_client.connect: fire_remote
+
+binary_sensor:
+  - platform: status
+    name: Status
+
+text_sensor:
+  - platform: version
+    name: ESPHome Version
+  - platform: wifi_info
+    ip_address:
+      name: IP Address
+    ssid:
+      name: Connected SSID
+    mac_address:
+      name: Wi-Fi MAC
+  - platform: amazon_remote
+    ble_client_id: fire_remote
+    name: Último botón
+
+sensor:
+  - platform: uptime
+    name: Uptime
+    update_interval: 60s
+  - platform: wifi_signal
+    name: Wi-Fi Signal
+    update_interval: 60s

@@ -1,0 +1,8 @@
+secrets.yaml
+.esphome/
+backups/
+upstream/
+_probe-*
+diagnostics/
+__pycache__/
+*.py[cod]
