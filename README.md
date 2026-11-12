@@ -11,6 +11,12 @@ No Fire TV, rooted device, custom HA integration or add-on is required.
 - **Bridge:** ESP32-S3 Zero, 4 MB flash and 2 MB PSRAM, using ESP-IDF.
 - **ESPHome:** 2026.10.2.
 
+<img src="assets/tested-remote.webp" alt="Reference image of the only tested Amazon remote" width="180">
+
+User-provided reference image of the tested remote, cropped from an
+[Amazon product photo](https://m.media-amazon.com/images/I/71rUQOC9BwL._AC_SL1500_.jpg).
+The Fire TV Stick and retail box are not required.
+
 The firmware runs on the ESP32, not on the remote. The remote pairs with the
 bridge and sends buttons and microphone audio over Bluetooth.
 
