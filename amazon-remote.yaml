@@ -132,9 +132,30 @@ script:
     mode: restart
     then:
       - delay: 30s
-      - voice_assistant.stop:
-          id: assist
+      - script.execute: assist_finish_recording
       - logger.log: "Assist recording limit reached (30s)"
+  - id: assist_finish_recording
+    mode: single
+    then:
+      # Stop the remote first; let queued PCM reach HA before sending end-of-audio.
+      - lambda: id(remote_buttons).set_microphone_enabled(false);
+      - delay: 100ms
+      - lambda: |-
+          auto *client = id(assist).get_api_connection();
+          if (client == nullptr) return;
+          esphome::api::VoiceAssistantAudio end;
+          end.end = true;
+          if (!client->send_message(end)) {
+            ESP_LOGW("assist", "Failed to send end-of-audio");
+            id(assist).request_stop();
+            return;
+          }
+          // Follow the native VAD-end lifecycle, without the abort sent by request_stop().
+          esphome::api::VoiceAssistantEventResponse event;
+          event.event_type = esphome::api::enums::VOICE_ASSISTANT_STT_VAD_END;
+          id(assist).on_event(event);
+          id(assist_status).publish_state("processing");
+          ESP_LOGI("assist", "Audio finished; waiting for transcription");
 
 voice_assistant:
   id: assist
@@ -145,6 +166,7 @@ voice_assistant:
         id: assist_status
         state: connected
   on_client_disconnected:
+    - script.stop: assist_finish_recording
     - microphone.stop_capture: remote_mic
     - voice_assistant.stop:
         id: assist
@@ -169,12 +191,14 @@ voice_assistant:
         id(assist_response).publish_state(x);
         ESP_LOGI("assist", "Response: %s", x.c_str());
   on_end:
+    - script.stop: assist_finish_recording
     - microphone.stop_capture: remote_mic
     - script.stop: assist_recording_limit
     - text_sensor.template.publish:
         id: assist_status
         state: idle
   on_error:
+    - script.stop: assist_finish_recording
     - microphone.stop_capture: remote_mic
     - script.stop: assist_recording_limit
     - lambda: |-
@@ -222,9 +246,20 @@ text_sensor:
               id(assist).request_start(false, false);
               id(assist_recording_limit).execute();
             }
-          } else if (x == "release:voice" || x == "disconnected") {
+          } else if (x == "release:voice") {
+            if (!id(alexa_held)) return;
             id(alexa_held) = false;
             id(assist_recording_limit).stop();
+            if (id(assist_status).state == "listening") {
+              id(assist_finish_recording).execute();
+            } else if (id(assist_status).state != "processing") {
+              // Released before HA started listening: cancel the empty session.
+              id(assist).request_stop();
+            }
+          } else if (x == "disconnected") {
+            id(alexa_held) = false;
+            id(assist_recording_limit).stop();
+            id(assist_finish_recording).stop();
             id(assist).request_stop();
           }
 

@@ -15,8 +15,9 @@ Amazon 0171:042F.
 
 Esta rama añade **Assist nativo por pulsación de Alexa**: F2 controla el micrófono,
 F0 entrega Opus y el ESP32 lo convierte a PCM de 16 kHz mono. Implementación
-compilada; la captura y el pipeline completo necesitan validación con el mando
-real y Home Assistant. IR queda fuera de alcance.
+compilada y captura/conversión PCM verificadas con el mando real, sin errores de
+decodificación ni pérdidas en las pruebas. El pipeline completo de Assist sigue
+en validación. IR queda fuera de alcance.
 La reconexión tras dormir/reiniciar necesita más pruebas; una primera pulsación
 puede servir solo para despertar el mando.
 
@@ -61,7 +62,9 @@ carga por USB permitió instalar la versión nueva.
 3. Deja vacías las acciones **Voz — pulsar / soltar** del blueprint si utilizas
    este control directo del firmware, para no duplicar acciones en HA.
 4. Mantén Alexa pulsado, espera a **Assist Status: listening**, habla y suelta.
-   La grabación tiene un límite de seguridad de 30 segundos.
+   La grabación tiene un límite de seguridad de 30 segundos. Al soltar se envía
+   `VoiceAssistantAudio.end`: `voice_assistant.stop` abortaría el pipeline en HA
+   y descartaría la transcripción.
 5. Revisa **Assist Transcript**, **Assist Response** y los logs de la web. No hay
    altavoz conectado: esta configuración no reproduce la respuesta en el mando.
 
@@ -89,6 +92,9 @@ g++ -std=c++17 -Wall -Wextra -Werror tests/audio_packet_queue.cpp \
 
 docker run --rm -v "$PWD:/config" --entrypoint python \
   ghcr.io/esphome/esphome:2026.10.2 /config/tests/test_blueprint.py
+
+docker run --rm -v "$PWD:/config" --entrypoint python \
+  ghcr.io/esphome/esphome:2026.10.2 /config/tests/test_assist_protocol.py
 ```
 
 ## Referencias
