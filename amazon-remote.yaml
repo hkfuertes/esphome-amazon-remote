@@ -108,7 +108,92 @@ binary_sensor:
   - platform: status
     name: Status
 
+globals:
+  - id: alexa_held
+    type: bool
+    restore_value: false
+    initial_value: 'false'
+
+audio:
+  codecs:
+    opus:
+      state_memory: psram
+      pseudostack:
+        buffer_memory: psram
+
+microphone:
+  - platform: amazon_remote
+    id: remote_mic
+    remote_id: remote_buttons
+
+# Safety ceiling if the release packet is lost; no continuous listening.
+script:
+  - id: assist_recording_limit
+    mode: restart
+    then:
+      - delay: 30s
+      - voice_assistant.stop:
+          id: assist
+      - logger.log: "Assist recording limit reached (30s)"
+
+voice_assistant:
+  id: assist
+  microphone: remote_mic
+  use_wake_word: false
+  on_client_connected:
+    - text_sensor.template.publish:
+        id: assist_status
+        state: connected
+  on_client_disconnected:
+    - microphone.stop_capture: remote_mic
+    - voice_assistant.stop:
+        id: assist
+    - script.stop: assist_recording_limit
+    - text_sensor.template.publish:
+        id: assist_status
+        state: disconnected
+  on_listening:
+    - text_sensor.template.publish:
+        id: assist_status
+        state: listening
+    - logger.log: "Assist listening: speak while holding Alexa"
+  on_stt_end:
+    - lambda: |-
+        id(assist_transcript).publish_state(x);
+        ESP_LOGI("assist", "Recognized: %s", x.c_str());
+    - text_sensor.template.publish:
+        id: assist_status
+        state: processing
+  on_tts_start:
+    - lambda: |-
+        id(assist_response).publish_state(x);
+        ESP_LOGI("assist", "Response: %s", x.c_str());
+  on_end:
+    - microphone.stop_capture: remote_mic
+    - script.stop: assist_recording_limit
+    - text_sensor.template.publish:
+        id: assist_status
+        state: idle
+  on_error:
+    - microphone.stop_capture: remote_mic
+    - script.stop: assist_recording_limit
+    - lambda: |-
+        id(assist_status).publish_state("error:" + code);
+        ESP_LOGW("assist", "%s: %s", code.c_str(), message.c_str());
+
 text_sensor:
+  - platform: template
+    id: assist_status
+    name: Assist Status
+    update_interval: never
+  - platform: template
+    id: assist_transcript
+    name: Assist Transcript
+    update_interval: never
+  - platform: template
+    id: assist_response
+    name: Assist Response
+    update_interval: never
   - platform: version
     name: ESPHome Version
   - platform: wifi_info
@@ -119,8 +204,29 @@ text_sensor:
     mac_address:
       name: Wi-Fi MAC
   - platform: amazon_remote
+    id: remote_buttons
     ble_client_id: fire_remote
     name: Último botón
+    on_value:
+      - lambda: |-
+          if (x == "press:voice") {
+            if (id(alexa_held)) return;
+            id(alexa_held) = true;
+            if (id(assist).get_api_connection() == nullptr) {
+              ESP_LOGW("assist", "Home Assistant has not connected to the Assist satellite");
+              id(assist_status).publish_state("not_connected");
+            } else if (!id(remote_mic).is_ready()) {
+              ESP_LOGW("assist", "Remote microphone is not ready");
+              id(assist_status).publish_state("microphone_not_ready");
+            } else if (!id(assist).is_running_or_continuous()) {
+              id(assist).request_start(false, false);
+              id(assist_recording_limit).execute();
+            }
+          } else if (x == "release:voice" || x == "disconnected") {
+            id(alexa_held) = false;
+            id(assist_recording_limit).stop();
+            id(assist).request_stop();
+          }
 
 sensor:
   - platform: uptime

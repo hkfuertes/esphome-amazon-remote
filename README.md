@@ -13,7 +13,10 @@ Amazon 0171:042F.
 - Blueprint para asignar acciones a 21 teclas, soltar Voz y soltar cualquier tecla.
 - OTA con contraseña, reinicio normal/seguro, diagnóstico Wi-Fi y AP de rescate.
 
-**El micrófono todavía no transmite audio a Assist.** IR queda fuera de alcance.
+Esta rama añade **Assist nativo por pulsación de Alexa**: F2 controla el micrófono,
+F0 entrega Opus y el ESP32 lo convierte a PCM de 16 kHz mono. Implementación
+compilada; la captura y el pipeline completo necesitan validación con el mando
+real y Home Assistant. IR queda fuera de alcance.
 La reconexión tras dormir/reiniciar necesita más pruebas; una primera pulsación
 puede servir solo para despertar el mando.
 
@@ -50,6 +53,24 @@ Comprueba la entidad **ESPHome Version** tras actualizar: durante las pruebas
 hubo cargas OTA aceptadas que dejaron ejecutándose el firmware anterior; la
 carga por USB permitió instalar la versión nueva.
 
+## Assist: pulsar para hablar
+
+1. Actualiza el firmware y comprueba que HA descubre el satélite Assist.
+2. En la página del dispositivo de ESPHome en HA, selecciona el asistente/pipeline
+   deseado, con reconocimiento de voz y TTS configurados.
+3. Deja vacías las acciones **Voz — pulsar / soltar** del blueprint si utilizas
+   este control directo del firmware, para no duplicar acciones en HA.
+4. Mantén Alexa pulsado, espera a **Assist Status: listening**, habla y suelta.
+   La grabación tiene un límite de seguridad de 30 segundos.
+5. Revisa **Assist Transcript**, **Assist Response** y los logs de la web. No hay
+   altavoz conectado: esta configuración no reproduce la respuesta en el mando.
+
+El micrófono solo se habilita durante una sesión iniciada por el botón. Si HA no
+está conectado al satélite, la pulsación avisa `not_connected` sin grabar. Los
+logs muestran el primer paquete Opus, los frames decodificados, pérdidas y pico
+PCM para poder diagnosticar silencio o problemas de transporte. La web y la API
+sin autenticar también exponen las transcripciones: mantén la red de confianza.
+
 ## Notas de hardware
 
 BLE se activa después de conectar el Wi-Fi. Los parámetros de conexión del
@@ -62,6 +83,9 @@ funcionó. Esto no demuestra un defecto físico ni una causa de coexistencia BLE
 ```sh
 g++ -std=c++17 -Wall -Wextra -Werror tests/button_decoder.cpp \
   -o /tmp/amazon-remote-test && /tmp/amazon-remote-test
+
+g++ -std=c++17 -Wall -Wextra -Werror tests/audio_packet_queue.cpp \
+  -o /tmp/amazon-audio-test && /tmp/amazon-audio-test
 
 docker run --rm -v "$PWD:/config" --entrypoint python \
   ghcr.io/esphome/esphome:2026.10.2 /config/tests/test_blueprint.py
