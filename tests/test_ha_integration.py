@@ -6,6 +6,7 @@ import ctypes
 import ctypes.util
 import importlib.util
 import json
+import struct
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -48,7 +49,14 @@ def test_mac_normalization() -> None:
             raise AssertionError(f"Expected ValueError for {bad!r}")
 
 
+def test_remote_type_detection() -> None:
+    assert proto.detect_remote_type("0005:00000171:0000042F") == "amazon"
+    assert proto.detect_remote_type("0005:000018D1:00009450") == "chromecast"
+    assert proto.detect_remote_type("0005:00001234:00005678") is None
+
+
 def test_button_decoding() -> None:
+    # Amazon Fire TV remote
     assert proto.decode_button(0x01, bytes([0x52, 0, 0])) == "up"
     assert proto.decode_button(0x01, bytes([0, 0, 0])) == "release"
     assert proto.decode_button(0x02, bytes([0x21, 0x02, 0, 0])) == "voice"
@@ -59,6 +67,18 @@ def test_button_decoding() -> None:
     assert proto.decode_button(0xEF, bytes([0x99])) == "unknown_ef_0099"
     assert proto.decode_button(0xF0, bytes([0xB8] * 80)) is None
     assert proto.decode_button(0x02, bytes([0x21])) == "invalid"
+
+    # Chromecast Remote (18D1:9450)
+    assert proto.decode_button(0x01, bytes([0x01, 0, 0, 0, 0, 0, 0, 0]), "chromecast") == "power"
+    assert proto.decode_button(0x01, bytes([0x06, 0, 0, 0, 0, 0, 0, 0]), "chromecast") == "right"
+    assert proto.decode_button(0x01, bytes([0x0C, 0, 0, 0, 0, 0, 0, 0]), "chromecast") == "volume_up"
+    assert proto.decode_button(0x01, bytes([0x0E, 0, 0, 0, 0, 0, 0, 0]), "chromecast") == "youtube"
+    assert proto.decode_button(0x01, bytes([0x0F, 0, 0, 0, 0, 0, 0, 0]), "chromecast") == "netflix"
+    assert proto.decode_button(0x01, bytes([0x11, 0, 0, 0, 0, 0, 0, 0]), "chromecast") == "tv"
+    assert proto.decode_button(0x01, bytes([0x00, 0, 0, 0, 0, 0, 0, 0]), "chromecast") == "release"
+    assert proto.decode_button(0x01, bytes([0xFF, 0, 0, 0, 0, 0, 0, 0]), "chromecast") == "unknown_01_00ff"
+    assert proto.decode_button(0x01, bytes([0x00, 0, 1]), "chromecast") == "invalid"
+    assert proto.decode_button(0x02, bytes([0x01, 0]), "chromecast") is None
 
 
 def test_report_descriptor_parsing() -> None:
@@ -103,10 +123,34 @@ def test_opus_decoder_roundtrip() -> None:
         dec.close()
 
 
+def test_ima_adpcm_decoder() -> None:
+    dec = proto.ImaAdpcmDecoder()
+    pcm = dec.decode(bytes([0x00] * 160))
+    assert len(pcm) == 640  # 160 bytes -> 320 samples -> 640 s16le bytes
+    dec.reset()
+    pcm_sig = dec.decode(bytes([0x7F, 0x7F, 0x00, 0x00] * 40))
+    assert len(pcm_sig) == 640
+    assert any(pcm_sig)
+    dec.reset()
+    vector = bytes.fromhex('77777748')
+    assert struct.unpack('<8h', dec.decode(vector)) == (
+        11, 41, 104, 240, 533, 1164, 1978, 1869
+    )
+    dec.reset()
+    whole = dec.decode(vector * 40)
+    dec.reset()
+    assert b''.join(dec.decode(bytes((b,))) for b in vector * 40) == whole
+    dec.reset()
+    assert dec.decode(vector * 40) == whole
+    dec.close()
+
+
 if __name__ == "__main__":
     test_manifest_and_translations()
     test_mac_normalization()
+    test_remote_type_detection()
     test_button_decoding()
     test_report_descriptor_parsing()
     test_opus_decoder_roundtrip()
+    test_ima_adpcm_decoder()
     print("OK: all bluetooth_tv_remotes HA integration checks passed")

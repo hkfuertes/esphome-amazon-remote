@@ -4,9 +4,11 @@ Native Home Assistant integration for Bluetooth TV remotes: buttons, push-to-tal
 Assist, and optional spoken replies on an existing media player. No ESP32,
 ESPHome, MQTT bridge, or extra add-on is required.
 
-**Currently supported and tested: Amazon Fire TV remote `AR` (`0171:042F`) only.**
-The integration has a generic name; other Bluetooth remotes are not supported yet.
-The current HID reports and microphone protocol remain Amazon-specific.
+**Support status:**
+- **Amazon Fire TV Remote** (`0171:042F`): validated buttons and Assist push-to-talk via `/dev/hidraw` (Opus).
+- **Chromecast with Google TV Remote** (`18D1:9450`): experimental buttons via `/dev/hidraw` and IMA ADPCM audio via BlueZ ATVV GATT (D-Bus). Standalone capture works, but integrated Assist recognition and HAOS reconnection are not yet reliable. See [test results](docs/chromecast-remote.md#home-assistant-integration-status).
+
+Multiple remotes can be added at the same time; each config entry is scoped to one Bluetooth MAC and creates its own independent device and entities.
 
 <img src="assets/tested-remote.webp" alt="The only tested Amazon Fire TV remote" width="150">
 
@@ -17,7 +19,7 @@ Photo source: [Amazon product image](https://m.media-amazon.com/images/I/71rUQOC
 - Linux with BlueZ and a local Bluetooth adapter. Tested on HAOS, Raspberry Pi 4,
   Home Assistant Core 2026.11.3.
 - A remote bonded to that host, exposing `/dev/hidraw*` to Home Assistant.
-- System `libopus.so.0` for microphone decoding (already present in tested HAOS).
+- System `libopus.so.0` for Amazon Opus decoding (already present in tested HAOS; Chromecast uses pure-Python IMA ADPCM over BlueZ D-Bus).
 - An Assist pipeline with speech-to-text, plus text-to-speech if using a speaker.
 
 Home Assistant Container installations must explicitly provide device access.
@@ -31,7 +33,7 @@ not generic GATT notifications through Home Assistant's Bluetooth manager.
 2. Restart Home Assistant.
 3. Bond the remote to the host using BlueZ (see below).
 4. Open **Settings → Devices & services → Add integration → Bluetooth TV Remotes**.
-5. Select the connected remote or enter its Bluetooth MAC address.
+5. Select the connected remote (model is auto-detected from `HID_ID`) or enter its Bluetooth MAC address. Repeat **Add integration** for additional remotes.
 
 This is a custom integration, not a built-in integration or a published HACS store
 entry. Home Assistant's standard custom-integration warning is expected.
@@ -108,13 +110,13 @@ Assistant brands support.
 python3 -m venv .venv
 .venv/bin/pip install PyYAML Jinja2
 .venv/bin/python tests/test_ha_integration.py
+.venv/bin/python tests/test_atvv_session.py
 .venv/bin/python tests/test_blueprint.py
 ```
 
-`test_ha_integration.py` checks metadata, MAC validation, Amazon button reports,
-HID descriptor parsing, and an Opus roundtrip when system libopus is available.
-The blueprint check covers all 21 keys, releases, and ignored connection states.
-
-Only the tested Amazon remote is supported in this change. Additional protocols
-and Bluetooth remotes are follow-up work; no speculative driver framework is
-included.
+`test_ha_integration.py` checks metadata, MAC validation, remote-type detection,
+Amazon and Chromecast button reports, HID descriptor parsing, IMA ADPCM decoding,
+and an Opus roundtrip when system libopus is available.
+`test_atvv_session.py` checks physical/on-request microphone sessions, release handling,
+session-specific safety stops, and malformed status rejection without HA or Bluetooth.
+The blueprint check covers all 23 keys, releases, and ignored connection states.

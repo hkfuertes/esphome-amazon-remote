@@ -3,9 +3,10 @@
     "step": {
       "user": {
         "title": "Bluetooth TV Remotes",
-        "description": "Selecciona un mando Fire TV emparejado (/dev/hidraw) o introduce su dirección MAC Bluetooth.",
+        "description": "Selecciona un mando TV Bluetooth emparejado (/dev/hidraw) o introduce su dirección MAC Bluetooth. Puedes añadir varios mandos a la vez.",
         "data": {
           "mac": "MAC Bluetooth del mando",
+          "remote_type": "Modelo de mando",
           "output_speaker": "Altavoz de respuesta Assist (opcional)"
         }
       }

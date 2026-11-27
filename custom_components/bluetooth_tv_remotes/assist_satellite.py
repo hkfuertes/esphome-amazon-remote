@@ -25,12 +25,19 @@ from . import (  # noqa: TID252
     device_info_for_entry,
     unique_prefix_for_mac,
 )
-from .const import CONF_MAC, DOMAIN, MAX_VOICE_SECONDS
-from .protocol import OpusDecoder
+from .const import (
+    CONF_MAC,
+    CONF_REMOTE_TYPE,
+    DOMAIN,
+    MAX_VOICE_SECONDS,
+    REMOTE_TYPE_AMAZON,
+    REMOTE_TYPE_CHROMECAST,
+)
+from .protocol import ImaAdpcmDecoder, OpusDecoder
 
 _LOGGER = logging.getLogger(__name__)
 
-_AUDIO_QUEUE_MAX = 64  # ~1.28 s of 20 ms Opus frames
+_AUDIO_QUEUE_MAX = 64  # ~1.28 s of 20 ms frames
 _RELEASE_DRAIN_SECONDS = 0.06
 
 
@@ -40,17 +47,23 @@ async def async_setup_entry(
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up the Assist Satellite entity."""
-    decoder = await hass.async_add_executor_job(OpusDecoder)
+    remote_type = entry.data.get(CONF_REMOTE_TYPE, REMOTE_TYPE_AMAZON)
+    if remote_type == REMOTE_TYPE_CHROMECAST:
+        decoder: OpusDecoder | ImaAdpcmDecoder = ImaAdpcmDecoder()
+    else:
+        decoder = await hass.async_add_executor_job(OpusDecoder)
     async_add_entities([TVRemoteAssistSatellite(entry, decoder)])
 
 
 class TVRemoteAssistSatellite(AssistSatelliteEntity):
-    """Push-to-talk Assist Satellite for an Amazon Fire TV remote."""
+    """Push-to-talk Assist Satellite for a Bluetooth TV remote."""
 
     _attr_has_entity_name = True
     _attr_name = "Assist Satellite"
 
-    def __init__(self, entry: TVRemoteConfigEntry, decoder: OpusDecoder) -> None:
+    def __init__(
+        self, entry: TVRemoteConfigEntry, decoder: OpusDecoder | ImaAdpcmDecoder
+    ) -> None:
         self._entry = entry
         self._client = entry.runtime_data
         self._prefix = unique_prefix_for_mac(entry.data[CONF_MAC])

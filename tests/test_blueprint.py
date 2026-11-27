@@ -22,11 +22,7 @@ spec.loader.exec_module(proto)
 
 blueprint = yaml.load((root / "blueprints/tv_remote_buttons.yaml").read_text(), Loader=Loader)
 inputs = blueprint["blueprint"]["input"]
-buttons = (
-    set(proto._KEYBOARD_BUTTONS.values())
-    | set(proto._CONSUMER_BUTTONS.values())
-    | set(proto._VENDOR_BUTTONS.values())
-)
+buttons = set(proto.ALL_BUTTONS)
 assert set(inputs) == buttons | {"remote", "release", "voice_release"}
 remote_filters = inputs["remote"]["selector"]["entity"]["filter"]
 assert remote_filters == [{"domain": "sensor", "integration": "bluetooth_tv_remotes"}]

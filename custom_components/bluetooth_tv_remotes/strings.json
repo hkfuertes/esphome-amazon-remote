@@ -3,9 +3,10 @@
     "step": {
       "user": {
         "title": "Bluetooth TV Remotes",
-        "description": "Select a bonded Amazon Fire TV remote (/dev/hidraw) or enter its Bluetooth MAC address.",
+        "description": "Select a bonded Bluetooth TV remote (/dev/hidraw) or enter its Bluetooth MAC address. Multiple remotes can be added independently.",
         "data": {
           "mac": "Remote Bluetooth MAC",
+          "remote_type": "Remote model",
           "output_speaker": "Assist output speaker (optional)"
         }
       }

@@ -1,8 +1,8 @@
 blueprint:
   name: Bluetooth TV Remotes — Buttons
   description: >-
-    Assign actions to the buttons on an Amazon Fire TV remote connected via the
-    Bluetooth TV Remotes integration.
+    Assign actions to the buttons on a remote connected via the
+    Bluetooth TV Remotes integration (Amazon Fire TV Remote, Chromecast Remote).
     Select the “Last Button” entity. All actions are optional.
     App buttons depend on the model; app_4 does not assume a particular brand.
     Actions receive the variables button (up, voice, etc.) and button_event
@@ -111,6 +111,11 @@ blueprint:
       default: []
       selector:
         action: {}
+    youtube:
+      name: YouTube
+      default: []
+      selector:
+        action: {}
     prime_video:
       name: Prime Video
       default: []
@@ -123,6 +128,11 @@ blueprint:
         action: {}
     disney_plus:
       name: Disney+
+      default: []
+      selector:
+        action: {}
+    app_3:
+      name: Third app
       default: []
       selector:
         action: {}
@@ -190,12 +200,16 @@ actions:
         sequence: !input power
       - conditions: "{{ button_event == 'press' and button == 'tv' }}"
         sequence: !input tv
+      - conditions: "{{ button_event == 'press' and button == 'youtube' }}"
+        sequence: !input youtube
       - conditions: "{{ button_event == 'press' and button == 'prime_video' }}"
         sequence: !input prime_video
       - conditions: "{{ button_event == 'press' and button == 'netflix' }}"
         sequence: !input netflix
       - conditions: "{{ button_event == 'press' and button == 'disney_plus' }}"
         sequence: !input disney_plus
+      - conditions: "{{ button_event == 'press' and button == 'app_3' }}"
+        sequence: !input app_3
       - conditions: "{{ button_event == 'press' and button == 'app_4' }}"
         sequence: !input app_4
   - choose:
