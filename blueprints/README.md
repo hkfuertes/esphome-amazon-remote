@@ -7,8 +7,8 @@
    - Or copy `amazon_remote_buttons.yaml` to
      `/config/blueprints/automation/amazon_remote/buttons.yaml` in Home Assistant,
      then reload blueprints.
-2. Create an automation using **Amazon Remote — ESPHome Buttons**.
-3. Select the bridge's **Last Button** sensor and configure the desired actions.
+2. Create an automation using **Amazon Remote — Buttons**.
+3. Select the remote's **Last Button** sensor from the `amazon_remote` integration and configure the desired actions.
    Leave any actions you do not need empty.
 
 The blueprint includes the buttons recognized by the decoder, a dedicated Voice
@@ -22,9 +22,8 @@ Only buttons sent by the remote over Bluetooth work. App names may vary by
 model. No artificial repeats or long presses are generated: actions respond to
 `press:` / `release:` sensor state changes and ignore startup/disconnection states.
 
-Local check (using the dependencies already included in the ESPHome image):
+Local check (requires PyYAML and Jinja2):
 
 ```sh
-docker run --rm -v "$PWD:/config" --entrypoint python \
-  ghcr.io/esphome/esphome:2026.10.2 /config/tests/test_blueprint.py
+python3 tests/test_blueprint.py
 ```

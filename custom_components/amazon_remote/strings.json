@@ -1,0 +1,30 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Amazon Remote",
+        "description": "Select a bonded Amazon Fire TV remote (/dev/hidraw) or enter its Bluetooth MAC address.",
+        "data": {
+          "mac": "Remote Bluetooth MAC",
+          "output_speaker": "Assist output speaker (optional)"
+        }
+      }
+    },
+    "error": {
+      "invalid_mac": "Enter a valid MAC address (AA:BB:CC:DD:EE:FF)."
+    },
+    "abort": {
+      "already_configured": "This remote is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Amazon Remote Options",
+        "data": {
+          "output_speaker": "Assist output speaker (optional)"
+        }
+      }
+    }
+  }
+}

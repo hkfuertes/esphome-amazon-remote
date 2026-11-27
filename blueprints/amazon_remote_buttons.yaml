@@ -1,7 +1,8 @@
 blueprint:
-  name: Amazon Remote — ESPHome Buttons
+  name: Amazon Remote — Buttons
   description: >-
-    Assign actions to the buttons on the remote connected through ESPHome.
+    Assign actions to the buttons on an Amazon Fire TV remote connected via the
+    Amazon Remote integration.
     Select the “Last Button” entity. All actions are optional.
     App buttons depend on the model; app_4 does not assume a particular brand.
     Actions receive the variables button (up, voice, etc.) and button_event
@@ -14,12 +15,12 @@ blueprint:
   input:
     remote:
       name: Last Button
-      description: The “Last Button” sensor entity from the ESPHome bridge.
+      description: The “Last Button” sensor entity from the Amazon Remote integration.
       selector:
         entity:
           filter:
             - domain: sensor
-              integration: esphome
+              integration: amazon_remote
     up:
       name: Up
       default: []
