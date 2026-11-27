@@ -1,4 +1,4 @@
-"""Amazon Remote native Home Assistant integration."""
+"""Bluetooth TV Remotes native Home Assistant integration."""
 
 from __future__ import annotations
 
@@ -7,12 +7,12 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import CONNECTION_BLUETOOTH, DeviceInfo
 
 from .const import CONF_MAC, DOMAIN, PLATFORMS
-from .hid_client import AmazonRemoteClient
+from .hid_client import TVRemoteClient
 
-type AmazonRemoteConfigEntry = ConfigEntry[AmazonRemoteClient]
+type TVRemoteConfigEntry = ConfigEntry[TVRemoteClient]
 
 
-def device_info_for_entry(entry: AmazonRemoteConfigEntry) -> DeviceInfo:
+def device_info_for_entry(entry: TVRemoteConfigEntry) -> DeviceInfo:
     """Shared DeviceInfo for all entities belonging to one remote."""
     mac = entry.data[CONF_MAC]
     return DeviceInfo(
@@ -29,17 +29,17 @@ def unique_prefix_for_mac(mac: str) -> str:
     return mac.replace(":", "").lower()
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: AmazonRemoteConfigEntry) -> bool:
-    """Set up Amazon Remote from a config entry."""
-    client = AmazonRemoteClient(hass.loop, entry.data[CONF_MAC])
+async def async_setup_entry(hass: HomeAssistant, entry: TVRemoteConfigEntry) -> bool:
+    """Set up Bluetooth TV Remotes from a config entry."""
+    client = TVRemoteClient(hass.loop, entry.data[CONF_MAC])
     entry.runtime_data = client
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     client.start()
     return True
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: AmazonRemoteConfigEntry) -> bool:
-    """Unload an Amazon Remote config entry."""
+async def async_unload_entry(hass: HomeAssistant, entry: TVRemoteConfigEntry) -> bool:
+    """Unload an Bluetooth TV Remotes config entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
         await entry.runtime_data.stop()

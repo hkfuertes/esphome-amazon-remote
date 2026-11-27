@@ -24,7 +24,7 @@ _LOGGER = logging.getLogger(__name__)
 RECONNECT_POLL_SECONDS = 0.5
 
 
-class AmazonRemoteClient:
+class TVRemoteClient:
     """Tracks a bonded Amazon remote via /dev/hidraw and dispatches buttons + Opus audio."""
 
     def __init__(self, loop: asyncio.AbstractEventLoop, mac: str) -> None:

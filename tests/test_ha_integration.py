@@ -1,4 +1,4 @@
-"""Self-checks for custom_components/amazon_remote protocol & HID client."""
+"""Self-checks for custom_components/bluetooth_tv_remotes protocol & HID client."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-COMP = ROOT / "custom_components" / "amazon_remote"
+COMP = ROOT / "custom_components" / "bluetooth_tv_remotes"
 
 
 def _load_module(name: str, path: Path):
@@ -20,12 +20,15 @@ def _load_module(name: str, path: Path):
     return mod
 
 
-proto = _load_module("amazon_remote_protocol", COMP / "protocol.py")
+proto = _load_module("bluetooth_tv_remotes_protocol", COMP / "protocol.py")
 
 
 def test_manifest_and_translations() -> None:
     manifest = json.loads((COMP / "manifest.json").read_text())
-    assert manifest["domain"] == "amazon_remote"
+    assert manifest["domain"] == "bluetooth_tv_remotes"
+    assert manifest["name"] == "Bluetooth TV Remotes"
+    assert manifest["connectivity"] == ["bluetooth"]
+    assert manifest["integration_type"] == "device"
     assert manifest["config_flow"] is True
     assert "assist_satellite" in manifest["dependencies"]
     for rel in ("strings.json", "translations/en.json", "translations/es.json"):
@@ -106,4 +109,4 @@ if __name__ == "__main__":
     test_button_decoding()
     test_report_descriptor_parsing()
     test_opus_decoder_roundtrip()
-    print("OK: all amazon_remote HA integration checks passed")
+    print("OK: all bluetooth_tv_remotes HA integration checks passed")

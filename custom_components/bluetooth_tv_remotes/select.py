@@ -1,4 +1,4 @@
-"""Assist pipeline and output speaker selectors for Amazon Remote."""
+"""Assist pipeline and output speaker selectors for Bluetooth TV Remotes."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from . import (  # noqa: TID252
-    AmazonRemoteConfigEntry,
+    TVRemoteConfigEntry,
     device_info_for_entry,
     unique_prefix_for_mac,
 )
@@ -27,31 +27,31 @@ SPEAKER_NONE = "None"
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: AmazonRemoteConfigEntry,
+    entry: TVRemoteConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up the Assist pipeline and output speaker selector entities."""
     async_add_entities(
         [
-            AmazonRemotePipelineSelect(hass, entry),
-            AmazonRemoteOutputSpeakerSelect(entry),
+            TVRemotePipelineSelect(hass, entry),
+            TVRemoteOutputSpeakerSelect(entry),
         ]
     )
 
 
-class AmazonRemotePipelineSelect(AssistPipelineSelect):
+class TVRemotePipelineSelect(AssistPipelineSelect):
     """Select which Assist pipeline runs for this remote."""
 
     _attr_has_entity_name = True
     _attr_name = "Assistant"
 
-    def __init__(self, hass: HomeAssistant, entry: AmazonRemoteConfigEntry) -> None:
+    def __init__(self, hass: HomeAssistant, entry: TVRemoteConfigEntry) -> None:
         mac = entry.data[CONF_MAC]
         super().__init__(hass, DOMAIN, unique_prefix_for_mac(mac))
         self._attr_device_info = device_info_for_entry(entry)
 
 
-class AmazonRemoteOutputSpeakerSelect(SelectEntity, RestoreEntity):
+class TVRemoteOutputSpeakerSelect(SelectEntity, RestoreEntity):
     """Dynamic dropdown of all media_player entities for Assist TTS output."""
 
     _attr_has_entity_name = True
@@ -60,7 +60,7 @@ class AmazonRemoteOutputSpeakerSelect(SelectEntity, RestoreEntity):
     _attr_entity_category = EntityCategory.CONFIG
     _attr_should_poll = False
 
-    def __init__(self, entry: AmazonRemoteConfigEntry) -> None:
+    def __init__(self, entry: TVRemoteConfigEntry) -> None:
         self._entry = entry
         self._client = entry.runtime_data
         self._attr_unique_id = f"{unique_prefix_for_mac(entry.data[CONF_MAC])}-output-speaker"

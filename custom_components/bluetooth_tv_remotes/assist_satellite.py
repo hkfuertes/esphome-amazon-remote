@@ -21,7 +21,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import (  # noqa: TID252
-    AmazonRemoteConfigEntry,
+    TVRemoteConfigEntry,
     device_info_for_entry,
     unique_prefix_for_mac,
 )
@@ -36,21 +36,21 @@ _RELEASE_DRAIN_SECONDS = 0.06
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: AmazonRemoteConfigEntry,
+    entry: TVRemoteConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up the Assist Satellite entity."""
     decoder = await hass.async_add_executor_job(OpusDecoder)
-    async_add_entities([AmazonRemoteAssistSatellite(entry, decoder)])
+    async_add_entities([TVRemoteAssistSatellite(entry, decoder)])
 
 
-class AmazonRemoteAssistSatellite(AssistSatelliteEntity):
+class TVRemoteAssistSatellite(AssistSatelliteEntity):
     """Push-to-talk Assist Satellite for an Amazon Fire TV remote."""
 
     _attr_has_entity_name = True
     _attr_name = "Assist Satellite"
 
-    def __init__(self, entry: AmazonRemoteConfigEntry, decoder: OpusDecoder) -> None:
+    def __init__(self, entry: TVRemoteConfigEntry, decoder: OpusDecoder) -> None:
         self._entry = entry
         self._client = entry.runtime_data
         self._prefix = unique_prefix_for_mac(entry.data[CONF_MAC])

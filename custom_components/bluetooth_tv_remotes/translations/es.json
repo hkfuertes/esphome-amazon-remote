@@ -2,7 +2,7 @@
   "config": {
     "step": {
       "user": {
-        "title": "Amazon Remote",
+        "title": "Bluetooth TV Remotes",
         "description": "Selecciona un mando Fire TV emparejado (/dev/hidraw) o introduce su dirección MAC Bluetooth.",
         "data": {
           "mac": "MAC Bluetooth del mando",
@@ -20,7 +20,7 @@
   "options": {
     "step": {
       "init": {
-        "title": "Opciones de Amazon Remote",
+        "title": "Opciones de Bluetooth TV Remotes",
         "data": {
           "output_speaker": "Altavoz de respuesta Assist (opcional)"
         }

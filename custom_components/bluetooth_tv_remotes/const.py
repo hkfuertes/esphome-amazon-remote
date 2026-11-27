@@ -1,8 +1,8 @@
-"""Constants for the Amazon Remote integration."""
+"""Constants for the Bluetooth TV Remotes integration."""
 
 from homeassistant.const import Platform
 
-DOMAIN = "amazon_remote"
+DOMAIN = "bluetooth_tv_remotes"
 
 CONF_MAC = "mac"
 CONF_OUTPUT_SPEAKER = "output_speaker"
