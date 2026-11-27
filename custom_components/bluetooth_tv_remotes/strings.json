@@ -2,7 +2,7 @@
   "config": {
     "step": {
       "user": {
-        "title": "Amazon Remote",
+        "title": "Bluetooth TV Remotes",
         "description": "Select a bonded Amazon Fire TV remote (/dev/hidraw) or enter its Bluetooth MAC address.",
         "data": {
           "mac": "Remote Bluetooth MAC",
@@ -20,7 +20,7 @@
   "options": {
     "step": {
       "init": {
-        "title": "Amazon Remote Options",
+        "title": "Bluetooth TV Remotes Options",
         "data": {
           "output_speaker": "Assist output speaker (optional)"
         }

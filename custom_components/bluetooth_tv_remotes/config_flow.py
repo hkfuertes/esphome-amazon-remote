@@ -1,4 +1,4 @@
-"""Config and options flows for Amazon Remote."""
+"""Config and options flows for Bluetooth TV Remotes."""
 
 from __future__ import annotations
 
@@ -29,8 +29,8 @@ def _speaker_selector() -> EntitySelector:
     )
 
 
-class AmazonRemoteConfigFlow(ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for Amazon Remote."""
+class TVRemoteConfigFlow(ConfigFlow, domain=DOMAIN):
+    """Handle a config flow for Bluetooth TV Remotes."""
 
     VERSION = 1
 
@@ -51,7 +51,7 @@ class AmazonRemoteConfigFlow(ConfigFlow, domain=DOMAIN):
                 speaker = (user_input.get(CONF_OUTPUT_SPEAKER) or "").strip()
                 options = {CONF_OUTPUT_SPEAKER: speaker} if speaker else {}
                 return self.async_create_entry(
-                    title=f"Amazon Remote ({mac[-5:]})",
+                    title=f"Amazon Fire TV Remote ({mac[-5:]})",
                     data={CONF_MAC: mac},
                     options=options,
                 )

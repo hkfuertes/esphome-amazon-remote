@@ -1,170 +1,120 @@
-# Amazon Remote → ESPHome → Home Assistant
+# Bluetooth TV Remotes
 
-Use an Amazon Bluetooth remote as a **push-to-talk Home Assistant Assist microphone**
-and a button controller, with an ESP32-S3 as the Bluetooth-to-Wi-Fi bridge.
-No Fire TV, rooted device, custom HA integration or add-on is required.
+Native Home Assistant integration for Bluetooth TV remotes: buttons, push-to-talk
+Assist, and optional spoken replies on an existing media player. No ESP32,
+ESPHome, MQTT bridge, or extra add-on is required.
 
-## Tested hardware
+**Currently supported and tested: Amazon Fire TV remote `AR` (`0171:042F`) only.**
+The integration has a generic name; other Bluetooth remotes are not supported yet.
+The current HID reports and microphone protocol remain Amazon-specific.
 
-- **Remote:** one Amazon remote advertising as `AR`, vendor/product `0171:042F`.
-  **This is the only remote tested by this project.** Other models are not verified.
-- **Bridge:** ESP32-S3 Zero, 4 MB flash and 2 MB PSRAM, using ESP-IDF.
-- **ESPHome:** 2026.10.2.
+<img src="assets/tested-remote.webp" alt="The only tested Amazon Fire TV remote" width="150">
 
-<img src="assets/tested-remote.webp" alt="Reference image of the only tested Amazon remote" width="180">
+Photo source: [Amazon product image](https://m.media-amazon.com/images/I/71rUQOC9BwL._AC_SL1500_.jpg).
 
-User-provided reference image of the tested remote, cropped from an
-[Amazon product photo](https://m.media-amazon.com/images/I/71rUQOC9BwL._AC_SL1500_.jpg).
-The Fire TV Stick and retail box are not required.
+## Requirements
 
-The firmware runs on the ESP32, not on the remote. The remote pairs with the
-bridge and sends buttons and microphone audio over Bluetooth.
+- Linux with BlueZ and a local Bluetooth adapter. Tested on HAOS, Raspberry Pi 4,
+  Home Assistant Core 2026.11.3.
+- A remote bonded to that host, exposing `/dev/hidraw*` to Home Assistant.
+- System `libopus.so.0` for microphone decoding (already present in tested HAOS).
+- An Assist pipeline with speech-to-text, plus text-to-speech if using a speaker.
 
-## What works
+Home Assistant Container installations must explicitly provide device access.
+Bluetooth proxies are **not supported**: this integration reads local HID devices,
+not generic GATT notifications through Home Assistant's Bluetooth manager.
 
-- BLE pairing with bonding and no PIN.
-- Navigation, media, voice and app-button events through the **Last Button** sensor.
-- Native Assist: **hold Alexa → speak → release → transcription and response**.
-- Opus audio decoded to 16-bit, mono, 16 kHz PCM on the ESP32.
-- Optional TTS playback on a Home Assistant `media_player`.
-- Local web interface with live logs, OTA, restart/safe-mode buttons and diagnostics.
-- An optional [button automation blueprint](blueprints/README.md).
+## Install
 
-There is no continuous listening, wake word, remote speaker output or IR control.
-Remote LED control has not been identified. Sleep/reboot reconnection needs more
-testing; the first press may only wake the remote.
+1. Copy `custom_components/bluetooth_tv_remotes/` from this repository into
+   `/config/custom_components/bluetooth_tv_remotes/` on Home Assistant.
+2. Restart Home Assistant.
+3. Bond the remote to the host using BlueZ (see below).
+4. Open **Settings → Devices & services → Add integration → Bluetooth TV Remotes**.
+5. Select the connected remote or enter its Bluetooth MAC address.
 
-## Quick start: only the YAML and your secrets
+This is a custom integration, not a built-in integration or a published HACS store
+entry. Home Assistant's standard custom-integration warning is expected.
 
-You do **not** need to clone the repository or copy `components/`. ESPHome downloads
-the external component from GitHub automatically.
+### Pairing the tested Amazon remote
 
-1. Download [`amazon-remote.yaml`](amazon-remote.yaml) and
-   [`secrets.example.yaml`](secrets.example.yaml) into the same directory.
-2. Rename `secrets.example.yaml` to `secrets.yaml`, enter your 2.4 GHz Wi-Fi and
-   strong OTA/rescue-AP passwords, then run `chmod 600 secrets.yaml`.
-3. Set the substitutions at the top of `amazon-remote.yaml`:
+Disconnect the old ESP32 bridge or other host first. Hold **Home for about ten
+seconds** to enter pairing mode, then use BlueZ with a `NoInputNoOutput` agent to
+pair, trust, and connect the remote. Wake advertising before those ten seconds is
+not necessarily pairing-mode advertising.
 
-   ```yaml
-   substitutions:
-     device_name: amazon-remote-bridge
-     friendly_name: Amazon Remote Bridge
-     remote_mac: "AA:BB:CC:DD:EE:FF"  # Your remote's Bluetooth MAC, not the ESP32's.
-   ```
+A stale trusted BlueZ entry caused premature connections during testing. Removing
+that remote's stale entry and pairing only after pairing-mode advertising began
+worked. Do not remove unrelated Bluetooth devices. The integration does not yet
+implement pairing itself.
 
-   Change `remote_mac` **once**. Both BLE connection and connection-timing setup use
-   that address. Keep `device_name` unique if you install more than one bridge.
-   Find the remote's address with a BLE scanner while it is in pairing mode.
-4. Build and flash using ESPHome 2026.10.2, for example:
+Successful pairing exposes a HID device whose `HID_UNIQ` in
+`/sys/class/hidraw/hidraw*/device/uevent` matches the remote's MAC address. On the
+tested HAOS setup this device also appeared inside the Home Assistant container.
+Pairing to another host can replace the remote's existing bond.
 
-   ```sh
-   docker run --rm -v "$PWD:/config" ghcr.io/esphome/esphome:2026.10.2 \
-     compile amazon-remote.yaml
-   docker run --rm --device=/dev/ttyACM0 -v "$PWD:/config" \
-     ghcr.io/esphome/esphome:2026.10.2 \
-     upload amazon-remote.yaml --device /dev/ttyACM0
-   ```
+## Use
 
-   Adjust the USB port as needed. If the board stays in download mode, press RESET
-   without holding BOOT. This configuration targets the tested S3 Zero; do not
-   assume its flash/PSRAM settings fit another ESP32 board.
-5. Hold Home for about 10 seconds to pair the remote. Pairing with another host
-   can replace its existing bond. You only need this for initial pairing, not
-   every button press.
-6. Open `http://amazon-remote-bridge.local/` (or its DHCP address). Add the ESPHome
-   device to HA using its address and port `6053`.
+The integration creates:
 
-The external component source is:
+- **Last Button**: `press:<key>` and `release:<key>`, plus connection status.
+- **Assistant**: select the Home Assistant Assist pipeline.
+- **Assist Satellite**: hold the Alexa/voice button to speak; release to finish.
+- **Assist Output Speaker**: dynamic dropdown of `media_player.*` entities.
+  Choose `None` for text-only Assist. Selection is restored after restart.
 
-```yaml
-external_components:
-  - source: github://hkfuertes/esphome-amazon-remote@main
-    components: [amazon_remote]
-```
+Voice capture stops after 30 seconds. The remote has no supported speaker output;
+replies play on the selected external media player. That player must be able to
+reach Home Assistant's generated TTS URL. Playback completion is not synchronized
+with the satellite's state.
 
-`main` follows ongoing development. For reproducible builds, replace `@main` with
-an exact commit SHA. An Internet connection is needed for the first download.
+### Button automations
 
-## Assist setup
+Install [the button blueprint](blueprints/README.md) and choose the integration's
+**Last Button** sensor. Leave Voice press/release actions empty when using native
+Assist so the blueprint does not duplicate voice handling.
 
-1. On the ESPHome device page in HA, choose an **Assistant** pipeline with STT and
-   TTS configured.
-2. Hold Alexa, wait for **Assist Status: listening**, speak and release.
-3. Check **Assist Transcript**, **Assist Response** and the web logs.
+## Migrating from Amazon Remote / ESPHome
 
-Releasing Alexa sends end-of-audio, allowing HA to transcribe and finish the
-pipeline. `voice_assistant.stop` would abort it instead. A 30-second safety limit
-finishes recording if the release event is lost.
+This branch replaces the former `amazon_remote` custom integration with
+`bluetooth_tv_remotes`. Home Assistant does not migrate config-entry domains
+in place:
 
-The microphone only starts for a button-initiated session. If HA is not connected
-or the remote microphone is not ready, the bridge reports that status rather than
-starting a recording.
+1. Note the pipeline, selected speaker, and automations you want to retain.
+2. Remove the old **Amazon Remote** integration entry, then its
+   `/config/custom_components/amazon_remote/` directory.
+3. Install **Bluetooth TV Remotes** as above. Keep the host's BlueZ bond; there is
+   no need to unpair just because the integration name changed.
+4. Re-select the pipeline and speaker. Update automations to the new entities and
+   install the renamed `tv_remote_buttons.yaml` blueprint.
 
-### Optional output speaker
+For an old ESPHome bridge, unplug it before pairing the remote directly to the
+Home Assistant host. Remove only that bridge's ESPHome device/integration entry
+when no longer needed, not Home Assistant's entire ESPHome integration.
 
-Enter a HA entity ID such as `media_player.living_room` in **Assist Output Speaker**.
-This is a **free-text field**, not an automatically populated dropdown. Leave it
-empty for text-only responses. The selection is stored across ESP32 restarts.
+The ESPHome implementation remains available in Git history before this cleanup.
 
-In HA, go to **Settings → Devices & services → ESPHome → your bridge → Configure**
-(or its options menu) and enable **Allow the device to perform Home Assistant
-actions**. Without this permission, HA reports that the bridge is not permitted
-to perform actions.
+## Bluetooth metadata and icon
 
-The chosen player must support `media_player.play_media` and be able to reach the
-TTS audio URL generated by HA. Playback is external; its completion is not
-synchronized with Assist status, and no audio plays through the remote.
+The manifest declares `connectivity: [bluetooth]` and integration type `device`.
+The Last Button entity uses the standard `mdi:bluetooth` icon. Connectivity metadata
+does **not** automatically give a custom integration the built-in Bluetooth
+integration's brand logo; that integration-card logo requires separate Home
+Assistant brands support.
 
-HA automatically creates extra Assistant 2, Finished speaking detection and Wake
-word selectors. This firmware does not use wake words or silence detection; the
-button controls recording. You can disable those unused entities in HA. Keep the
-primary **Assistant** selector enabled to choose the pipeline.
-
-## Button automations
-
-Use the [blueprint](blueprints/README.md) to assign actions to decoded buttons.
-Only buttons actually sent over Bluetooth will work; the blueprint lists decoder
-capabilities, not a guarantee that every key exists on the tested remote.
-
-If using native Assist, leave the blueprint's **Voice — press/release** actions
-empty to avoid controlling the same session twice. The blueprint itself does not
-transport audio. No artificial repeats or long-press events are generated.
-
-**Existing installations:** the button sensor is now named **Last Button**, formerly
-**Último botón**. HA may retain its existing name/entity ID; check your blueprint's
-sensor selection after updating. Event values such as `press:voice` are unchanged.
-
-## Updates and security
-
-- OTA: `upload amazon-remote.yaml --device <IP>`; verify **ESPHome Version** afterward.
-  During development, some accepted OTA uploads left the old firmware running;
-  USB flashing installed the intended build.
-- **Development defaults: the native API is unencrypted and unauthenticated, and
-  the web interface has no authentication. Use only on a trusted LAN. Never expose
-  these ports to the Internet.** Audio, transcripts and responses are sensitive.
-- OTA and the fallback AP use passwords from `secrets.yaml`. Keep secrets local;
-  they are ignored by Git. Do not commit real credentials in examples or logs.
-- BLE starts after Wi-Fi connects, with legacy bonding and no MITM requirement.
-  The tested connection timing is 15 ms interval, latency 4 and 4 s timeout.
-
-## Checks
+## Development
 
 ```sh
-for test in button_decoder audio_packet_queue; do
-  g++ -std=c++17 -Wall -Wextra -Werror "tests/$test.cpp" -o "/tmp/$test"
-  "/tmp/$test"
-done
-
-for test in test_config test_blueprint test_assist_protocol test_output_speaker; do
-  docker run --rm -v "$PWD:/config" --entrypoint python \
-    ghcr.io/esphome/esphome:2026.10.2 "/config/tests/$test.py"
-done
+python3 -m venv .venv
+.venv/bin/pip install PyYAML Jinja2
+.venv/bin/python tests/test_ha_integration.py
+.venv/bin/python tests/test_blueprint.py
 ```
 
-## References
+`test_ha_integration.py` checks metadata, MAC validation, Amazon button reports,
+HID descriptor parsing, and an Opus roundtrip when system libopus is available.
+The blueprint check covers all 21 keys, releases, and ignored connection states.
 
-- [atv-remote-hid-bridge](https://github.com/hkfuertes/atv-remote-hid-bridge): BLE
-  security and connection-timing reference.
-- [fire-remote-client](https://github.com/justanotheruseer/fire-remote-client): HID
-  microphone protocol, Opus capture and button mapping reference. Its tested
-  models do not imply additional hardware validation in this project.
+Only the tested Amazon remote is supported in this change. Additional protocols
+and Bluetooth remotes are follow-up work; no speculative driver framework is
+included.

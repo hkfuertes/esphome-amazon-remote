@@ -3,12 +3,12 @@
 1. Install the blueprint using either method:
    - In Home Assistant, go to **Settings → Automations & scenes → Blueprints →
      Import Blueprint** and import this public URL:
-     https://github.com/hkfuertes/esphome-amazon-remote/blob/main/blueprints/amazon_remote_buttons.yaml
-   - Or copy `amazon_remote_buttons.yaml` to
-     `/config/blueprints/automation/amazon_remote/buttons.yaml` in Home Assistant,
+     https://github.com/hkfuertes/ha-bluetooth-tv-remotes/blob/main/blueprints/tv_remote_buttons.yaml
+   - Or copy `tv_remote_buttons.yaml` to
+     `/config/blueprints/automation/bluetooth_tv_remotes/buttons.yaml` in Home Assistant,
      then reload blueprints.
-2. Create an automation using **Amazon Remote — Buttons**.
-3. Select the remote's **Last Button** sensor from the `amazon_remote` integration and configure the desired actions.
+2. Create an automation using **Bluetooth TV Remotes — Buttons**.
+3. Select the remote's **Last Button** sensor from the `bluetooth_tv_remotes` integration and configure the desired actions.
    Leave any actions you do not need empty.
 
 The blueprint includes the buttons recognized by the decoder, a dedicated Voice

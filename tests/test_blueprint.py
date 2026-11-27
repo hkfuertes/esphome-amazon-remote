@@ -14,13 +14,13 @@ class Loader(yaml.SafeLoader):
 Loader.add_constructor("!input", lambda loader, node: {"input": loader.construct_scalar(node)})
 root = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location(
-    "amazon_remote_protocol", root / "custom_components/amazon_remote/protocol.py"
+    "bluetooth_tv_remotes_protocol", root / "custom_components/bluetooth_tv_remotes/protocol.py"
 )
 assert spec and spec.loader
 proto = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(proto)
 
-blueprint = yaml.load((root / "blueprints/amazon_remote_buttons.yaml").read_text(), Loader=Loader)
+blueprint = yaml.load((root / "blueprints/tv_remote_buttons.yaml").read_text(), Loader=Loader)
 inputs = blueprint["blueprint"]["input"]
 buttons = (
     set(proto._KEYBOARD_BUTTONS.values())
@@ -29,7 +29,7 @@ buttons = (
 )
 assert set(inputs) == buttons | {"remote", "release", "voice_release"}
 remote_filters = inputs["remote"]["selector"]["entity"]["filter"]
-assert remote_filters == [{"domain": "sensor", "integration": "amazon_remote"}]
+assert remote_filters == [{"domain": "sensor", "integration": "bluetooth_tv_remotes"}]
 assert blueprint["triggers"][0]["entity_id"] == {"input": "remote"}
 assert blueprint["triggers"][0]["to"] is None  # Ignore attribute-only updates.
 assert blueprint["mode"] == "parallel"

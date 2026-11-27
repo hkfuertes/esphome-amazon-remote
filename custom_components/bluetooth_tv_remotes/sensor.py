@@ -1,4 +1,4 @@
-"""Last Button sensor for Amazon Remote."""
+"""Last Button sensor for Bluetooth TV Remotes."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import (  # noqa: TID252
-    AmazonRemoteConfigEntry,
+    TVRemoteConfigEntry,
     device_info_for_entry,
     unique_prefix_for_mac,
 )
@@ -16,22 +16,22 @@ from .const import CONF_MAC
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: AmazonRemoteConfigEntry,
+    entry: TVRemoteConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up the Last Button sensor."""
-    async_add_entities([AmazonRemoteButtonSensor(entry)])
+    async_add_entities([TVRemoteButtonSensor(entry)])
 
 
-class AmazonRemoteButtonSensor(SensorEntity):
+class TVRemoteButtonSensor(SensorEntity):
     """Publishes ready/disconnected and press:<key>/release:<key> states."""
 
     _attr_has_entity_name = True
     _attr_name = "Last Button"
-    _attr_icon = "mdi:remote"
+    _attr_icon = "mdi:bluetooth"
     _attr_should_poll = False
 
-    def __init__(self, entry: AmazonRemoteConfigEntry) -> None:
+    def __init__(self, entry: TVRemoteConfigEntry) -> None:
         self._client = entry.runtime_data
         self._attr_unique_id = f"{unique_prefix_for_mac(entry.data[CONF_MAC])}-last-button"
         self._attr_device_info = device_info_for_entry(entry)
