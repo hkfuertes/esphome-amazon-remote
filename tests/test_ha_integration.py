@@ -1,0 +1,109 @@
+"""Self-checks for custom_components/amazon_remote protocol & HID client."""
+
+from __future__ import annotations
+
+import ctypes
+import ctypes.util
+import importlib.util
+import json
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+COMP = ROOT / "custom_components" / "amazon_remote"
+
+
+def _load_module(name: str, path: Path):
+    spec = importlib.util.spec_from_file_location(name, path)
+    assert spec and spec.loader
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+proto = _load_module("amazon_remote_protocol", COMP / "protocol.py")
+
+
+def test_manifest_and_translations() -> None:
+    manifest = json.loads((COMP / "manifest.json").read_text())
+    assert manifest["domain"] == "amazon_remote"
+    assert manifest["config_flow"] is True
+    assert "assist_satellite" in manifest["dependencies"]
+    for rel in ("strings.json", "translations/en.json", "translations/es.json"):
+        data = json.loads((COMP / rel).read_text())
+        assert "config" in data
+
+
+def test_mac_normalization() -> None:
+    assert proto.normalize_mac("aa:bb:cc:dd:ee:ff") == "AA:BB:CC:DD:EE:FF"
+    assert proto.normalize_mac("aa-bb-cc-dd-ee-ff") == "AA:BB:CC:DD:EE:FF"
+    for bad in ("", "AA:BB:CC", "GG:BB:CC:DD:EE:FF"):
+        try:
+            proto.normalize_mac(bad)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f"Expected ValueError for {bad!r}")
+
+
+def test_button_decoding() -> None:
+    assert proto.decode_button(0x01, bytes([0x52, 0, 0])) == "up"
+    assert proto.decode_button(0x01, bytes([0, 0, 0])) == "release"
+    assert proto.decode_button(0x02, bytes([0x21, 0x02, 0, 0])) == "voice"
+    assert proto.decode_button(0x02, bytes([0x23, 0x02, 0, 0])) == "home"
+    assert proto.decode_button(0x02, bytes([0x00, 0x00])) == "release"
+    assert proto.decode_button(0xEF, bytes([0xA1, 0, 0])) == "prime_video"
+    assert proto.decode_button(0xEF, bytes([0xA4, 0, 0])) == "app_4"
+    assert proto.decode_button(0xEF, bytes([0x99])) == "unknown_ef_0099"
+    assert proto.decode_button(0xF0, bytes([0xB8] * 80)) is None
+    assert proto.decode_button(0x02, bytes([0x21])) == "invalid"
+
+
+def test_report_descriptor_parsing() -> None:
+    # Synthetic descriptor matching real AR remote (F0=80B in, F2=1B out, F3=10B out)
+    desc = bytes([
+        0x85, 0x01, 0x75, 0x08, 0x95, 0x03, 0x81, 0x00,
+        0x85, 0xF0, 0x75, 0x08, 0x95, 0x50, 0x81, 0x02,
+        0x85, 0xF2, 0x75, 0x08, 0x95, 0x01, 0x91, 0x02,
+        0x85, 0xF3, 0x75, 0x08, 0x95, 0x0A, 0x91, 0x02,
+    ])
+    assert proto.parse_report_ids(desc) == (0xF0, 0xF2)
+    # Also verify archived real 149-byte descriptor if present locally
+    real_map = ROOT / "diagnostics" / "remote-hid-map-1.bin"
+    if real_map.exists():
+        assert proto.parse_report_ids(real_map.read_bytes()) == (0xF0, 0xF2)
+
+
+def test_opus_decoder_roundtrip() -> None:
+    lib_name = ctypes.util.find_library("opus")
+    if not lib_name:
+        return
+    lib = ctypes.CDLL(lib_name)
+    lib.opus_encoder_create.restype = ctypes.c_void_p
+    lib.opus_encode.argtypes = [
+        ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p, ctypes.c_int
+    ]
+    lib.opus_encoder_destroy.argtypes = [ctypes.c_void_p]
+    err = ctypes.c_int(0)
+    enc = lib.opus_encoder_create(16000, 1, 2048, ctypes.byref(err))
+    pcm_in = (ctypes.c_int16 * 320)(*([1200, -1200] * 160))
+    pkt = (ctypes.c_ubyte * 128)()
+    n = lib.opus_encode(enc, pcm_in, 320, pkt, 128)
+    lib.opus_encoder_destroy(enc)
+
+    dec = proto.OpusDecoder()
+    try:
+        dec.reset()
+        pcm_out = dec.decode(bytes(pkt[:n]))
+        assert len(pcm_out) == 640  # 320 samples * 2 bytes
+        assert any(pcm_out)
+    finally:
+        dec.close()
+
+
+if __name__ == "__main__":
+    test_manifest_and_translations()
+    test_mac_normalization()
+    test_button_decoding()
+    test_report_descriptor_parsing()
+    test_opus_decoder_roundtrip()
+    print("OK: all amazon_remote HA integration checks passed")
